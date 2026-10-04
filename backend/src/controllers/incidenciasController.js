@@ -57,6 +57,35 @@ export async function obtenerPorId(req, res, next) {
   }
 }
 
+export async function valoresSugeridos(req, res, next) {
+  try {
+    const data = await incidenciasService.obtenerValoresSugeridos();
+    res.json({ ok: true, data });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function descartarSugerido(req, res, next) {
+  try {
+    const { campo, valor } = req.body;
+    await incidenciasService.descartarValorSugerido(campo, valor);
+    res.json({ ok: true, mensaje: 'Valor quitado de las sugerencias' });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function restaurarSugerido(req, res, next) {
+  try {
+    const { campo, valor } = req.body;
+    await incidenciasService.restaurarValorSugerido(campo, valor);
+    res.json({ ok: true, mensaje: 'Valor restaurado en las sugerencias' });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function crear(req, res, next) {
   try {
     const errors = validationResult(req);
@@ -69,6 +98,24 @@ export async function crear(req, res, next) {
     const incidencia = await incidenciasService.crearIncidencia(req.body, usuarioIdSesion);
 
     res.status(201).json({ ok: true, data: incidencia });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function actualizar(req, res, next) {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ ok: false, errors: errors.array() });
+    }
+
+    const { id } = req.params;
+    const usuarioIdSesion = req.session.userId;
+
+    const incidencia = await incidenciasService.actualizarIncidencia(id, req.body, usuarioIdSesion);
+
+    res.json({ ok: true, data: incidencia });
   } catch (error) {
     next(error);
   }

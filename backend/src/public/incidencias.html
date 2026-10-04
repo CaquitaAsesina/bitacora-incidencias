@@ -8,6 +8,54 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="css/styles.css">
+    <style>
+        .sugerencias-wrap { position: relative; }
+
+        .sugerencias-lista {
+            position: absolute;
+            z-index: 1080;
+            top: 100%;
+            left: 0;
+            right: 0;
+            max-height: 220px;
+            overflow-y: auto;
+            background: #fff;
+            border: 1px solid #ced4da;
+            border-radius: .375rem;
+            box-shadow: 0 .5rem 1rem rgba(0, 0, 0, .15);
+            margin-top: 2px;
+            display: none;
+        }
+
+        .sugerencias-lista.mostrar { display: block; }
+
+        .sugerencias-item {
+            display: flex;
+            align-items: center;
+            gap: .5rem;
+            padding: .4rem .6rem;
+            cursor: pointer;
+        }
+
+        .sugerencias-item:hover { background-color: #f8f9fa; }
+
+        .sugerencias-texto { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        .sugerencias-borrar {
+            border: 0;
+            background: transparent;
+            color: #dc3545;
+            font-weight: 700;
+            line-height: 1;
+            padding: 0 .25rem;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        .sugerencias-borrar:hover { color: #b02a37; }
+
+        .sugerencias-vacio { padding: .4rem .6rem; color: #6c757d; font-size: .875rem; }
+    </style>
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-danger sticky-top">
@@ -111,15 +159,13 @@
                                         <th>ID</th>
                                         <th>Ticket</th>
                                         <th>Fecha</th>
-                                        <th>Tipo Centro</th>
+                                        <th>Hora Inicio</th>
+                                        <th>Hora Fin</th>
                                         <th>Centro</th>
                                         <th>Sistema</th>
                                         <th>Incidencia</th>
-                                        <th>Resp. Actual</th>
-                                        <th>Resp. (Texto)</th>
+                                        <th>Responsable</th>
                                         <th>Estado</th>
-                                        <th>Hora Inicio</th>
-                                        <th>Hora Fin</th>
                                         <th>Tiempo Solución</th>
                                         <th>Acciones</th>
                                     </tr>
@@ -185,6 +231,109 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                     <button type="button" class="btn btn-danger" id="btnGuardarIncidencia">Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Ver Detalle -->
+    <div class="modal fade" id="modalDetalleIncidencia" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">Detalle de Incidencia</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="d-flex justify-content-between align-items-start mb-3 pb-3 border-bottom">
+                        <div>
+                            <div class="text-muted small">Ticket</div>
+                            <div class="fs-5 fw-bold" id="detalleTicket">-</div>
+                        </div>
+                        <div class="text-end">
+                            <span id="detalleEstado" class="badge fs-6">-</span>
+                        </div>
+                    </div>
+
+                    <h6 class="text-uppercase text-muted small fw-bold mb-2">Datos de la incidencia</h6>
+                    <div class="row g-3 mb-4" id="detalleDatos"></div>
+
+                    <h6 class="text-uppercase text-muted small fw-bold mb-2">Tiempos</h6>
+                    <div class="row g-3 mb-4" id="detalleTiempos"></div>
+
+                    <h6 class="text-uppercase text-muted small fw-bold mb-2">Descripción</h6>
+                    <div class="border rounded p-3 bg-light" id="detalleDescripcion">-</div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                    <button type="button" class="btn btn-warning" id="btnDetalleEditar">
+                        <i class="bi bi-pencil"></i> Modificar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Modificar Incidencia -->
+    <div class="modal fade" id="modalEditarIncidencia" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-warning text-dark">
+                    <h5 class="modal-title">Modificar Incidencia</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="editarId">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Tipo Centro *</label>
+                            <select class="form-select" id="editarTipoCentro" required>
+                                <option value="DISTRIBUCION">DISTRIBUCION</option>
+                                <option value="TRANSFERENCIA">TRANSFERENCIA</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Ticket *</label>
+                            <input type="text" class="form-control" id="editarTicket" maxlength="59" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Centro *</label>
+                            <input type="text" class="form-control" id="editarCentro" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Sistema *</label>
+                            <input type="text" class="form-control" id="editarSistema" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Incidencia *</label>
+                            <input type="text" class="form-control" id="editarIncidencia" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Responsable (Texto libre) *</label>
+                            <input type="text" class="form-control" id="editarResponsable" maxlength="60" required>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Descripción *</label>
+                            <textarea class="form-control" id="editarDescripcion" rows="3" maxlength="255" required></textarea>
+                        </div>
+                    </div>
+
+                    <hr>
+                    <h6 class="fw-bold">Cerrar incidencia</h6>
+                    <div id="editarCerrarAviso" class="alert alert-success py-2">
+                        Esta incidencia ya está cerrada. No se puede volver a cerrar.
+                    </div>
+                    <div id="editarCerrarCampos" class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Hora de fin</label>
+                            <input type="time" class="form-control" id="editarHoraFin">
+                            <div class="form-text">Si la dejas vacía se usa la hora actual del servidor.</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-warning" id="btnGuardarEditarIncidencia">Guardar Cambios</button>
                 </div>
             </div>
         </div>

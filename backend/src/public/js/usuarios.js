@@ -1,7 +1,189 @@
+let usuariosData = [];
+let rolesData = [];
+const modalUsuario = new bootstrap.Modal(document.getElementById('modalUsuario'));
+
 document.addEventListener('DOMContentLoaded', async () => {
   await checkAuth();
+
   if (hasPermission('CREAR_USUARIO')) {
     document.getElementById('btnNuevoUsuario').style.display = 'inline-block';
+    document.getElementById('btnNuevoUsuario').addEventListener('click', abrirModalNuevo);
+  }
+
+  document.getElementById('btnGuardarUsuario').addEventListener('click', guardarUsuario);
+
+  const idsFiltro = ['filtroUsuario', 'filtroNombre', 'filtroEmail', 'filtroTelefono'];
+  idsFiltro.forEach((id) => {
+    document.getElementById(id).addEventListener('input', renderTablaUsuarios);
+  });
+  document.getElementById('filtroRol').addEventListener('change', renderTablaUsuarios);
+  document.getElementById('filtroHabilitado').addEventListener('change', renderTablaUsuarios);
+  document.getElementById('btnLimpiarFiltrosUsuarios').addEventListener('click', () => {
+    idsFiltro.forEach((id) => (document.getElementById(id).value = ''));
+    document.getElementById('filtroRol').value = '';
+    document.getElementById('filtroHabilitado').value = '';
+    renderTablaUsuarios();
+  });
+
+  await cargarDatos();
+});
+
+async function cargarDatos() {
+  const rolesRes = await apiRequest('/roles');
+  if (rolesRes.ok) {
+    rolesData = rolesRes.data;
+    const selectRol = document.getElementById('filtroRol');
+    const seleccionActual = selectRol.value;
+    selectRol.innerHTML = '<option value="">Todos los roles</option>';
+    rolesData.forEach(r => {
+      selectRol.innerHTML += `<option value="${r.id}">${r.nombre} (${r.tipo})</option>`;
+    });
+    selectRol.value = seleccionActual;
   }
   await cargarUsuarios();
-});
+}
+
+async function cargarUsuarios() {
+  const res = await apiRequest('/usuarios');
+  if (res.ok) {
+    // El endpoint ya incluye el array `roles` de cada usuario.
+    usuariosData = res.data.map(u => ({
+      ...u,
+      roles: Array.isArray(u.roles) ? u.roles : [],
+    }));
+    renderTablaUsuarios();
+  }
+}
+
+function normalizar(valor) {
+  return (valor || '')
+    .toString()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+function usuariosFiltrados() {
+  const fUsuario = normalizar(document.getElementById('filtroUsuario').value.trim());
+  const fNombre = normalizar(document.getElementById('filtroNombre').value.trim());
+  const fEmail = normalizar(document.getElementById('filtroEmail').value.trim());
+  const fTelefono = normalizar(document.getElementById('filtroTelefono').value.trim());
+  const fRol = document.getElementById('filtroRol').value;
+  const fHabilitado = document.getElementById('filtroHabilitado').value;
+
+  return usuariosData.filter((u) => {
+    if (fUsuario && !normalizar(u.usuario).includes(fUsuario)) return false;
+    if (fNombre && !normalizar(`${u.nombre} ${u.apellido}`).includes(fNombre)) return false;
+    if (fEmail && !normalizar(u.email).includes(fEmail)) return false;
+    if (fTelefono && !normalizar(u.telefono).includes(fTelefono)) return false;
+    if (fRol && !(u.roles || []).some((r) => r.id === parseInt(fRol, 10))) return false;
+    if (fHabilitado !== '' && String(u.habilitado ? 1 : 0) !== fHabilitado) return false;
+    return true;
+  });
+}
+
+function renderTablaUsuarios() {
+  const filtrados = usuariosFiltrados();
+  const tbody = document.getElementById('tablaUsuariosBody');
+  tbody.innerHTML = '';
+
+  document.getElementById('contadorUsuarios').textContent =
+    `Mostrando ${filtrados.length} de ${usuariosData.length} usuario(s).`;
+
+  if (filtrados.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">No hay usuarios que coincidan con los filtros.</td></tr>';
+    return;
+  }
+
+  filtrados.forEach((usuario) => {
+    const roles = usuario.roles || [];
+    const rolesHtml = roles.length === 0
+      ? '<span class="text-muted">Sin roles</span>'
+      : roles.map(r => `
+          <span class="badge ${r.tipo === 'SISTEMA' ? 'bg-danger' : 'bg-info'}">${r.nombre}</span>`).join(' ');
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${usuario.id}</td>
+      <td>${usuario.usuario}</td>
+      <td>${usuario.nombre}</td>
+      <td>${usuario.apellido}</td>
+      <td>${usuario.email}</td>
+      <td>${usuario.telefono || '-'}</td>
+      <td>${usuario.habilitado ? '<span class="badge bg-success">Sí</span>' : '<span class="badge bg-danger">No</span>'}</td>
+      <td>${rolesHtml}</td>
+      <td>
+        ${hasPermission('CREAR_USUARIO') ? `<button class="btn btn-sm btn-primary" onclick="editarUsuario(${usuario.id})"><i class="bi bi-pencil"></i> Modificar</button>` : ''}
+        ${hasPermission('CREAR_USUARIO') ? `<button class="btn btn-sm btn-danger ms-1" onclick="eliminarUsuario(${usuario.id})"><i class="bi bi-trash"></i> Eliminar</button>` : ''}
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function abrirModalNuevo() {
+  editingUsuarioId = null;
+  document.getElementById('modalUsuarioTitle').textContent = 'Nuevo Usuario';
+  document.getElementById('formUsuario').reset();
+  document.getElementById('passwordGroup').style.display = 'block';
+  document.getElementById('contrasena').required = true;
+  modalUsuario.show();
+}
+
+let editingUsuarioId = null;
+
+window.editarUsuario = function(id) {
+  const usuario = usuariosData.find(u => u.id === id);
+  if (!usuario) return;
+  editingUsuarioId = id;
+  document.getElementById('modalUsuarioTitle').textContent = 'Modificar Usuario';
+  document.getElementById('usuario').value = usuario.usuario;
+  document.getElementById('nombre').value = usuario.nombre;
+  document.getElementById('apellido').value = usuario.apellido;
+  document.getElementById('email').value = usuario.email;
+  document.getElementById('telefono').value = usuario.telefono || '';
+  document.getElementById('habilitado').value = usuario.habilitado ? 'true' : 'false';
+  document.getElementById('passwordGroup').style.display = 'none';
+  document.getElementById('contrasena').required = false;
+  document.getElementById('contrasena').value = '';
+  modalUsuario.show();
+};
+
+async function guardarUsuario() {
+  const data = {
+    usuario: document.getElementById('usuario').value,
+    nombre: document.getElementById('nombre').value,
+    apellido: document.getElementById('apellido').value,
+    email: document.getElementById('email').value,
+    telefono: document.getElementById('telefono').value || null,
+    habilitado: document.getElementById('habilitado').value === 'true',
+  };
+  if (document.getElementById('contrasena').value) {
+    data.contrasena = document.getElementById('contrasena').value;
+  }
+  let res;
+  if (editingUsuarioId) {
+    res = await apiRequest(`/usuarios/${editingUsuarioId}`, { method: 'PATCH', body: JSON.stringify(data) });
+  } else {
+    data.contrasena = data.contrasena || document.getElementById('contrasena').value;
+    res = await apiRequest('/usuarios', { method: 'POST', body: JSON.stringify(data) });
+  }
+  if (res.ok) {
+    showToast(editingUsuarioId ? 'Usuario modificado' : 'Usuario creado', 'success');
+    modalUsuario.hide();
+    await cargarUsuarios();
+  } else {
+    showToast(res.mensaje || 'Error al guardar usuario', 'error');
+  }
+}
+
+window.eliminarUsuario = async function(id) {
+  if (!confirm('¿Eliminar este usuario?')) return;
+  const res = await apiRequest(`/usuarios/${id}`, { method: 'DELETE' });
+  if (res.ok) {
+    showToast('Usuario eliminado', 'success');
+    await cargarUsuarios();
+  } else {
+    showToast(res.mensaje || 'Error al eliminar', 'error');
+  }
+};

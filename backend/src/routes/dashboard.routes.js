@@ -9,6 +9,7 @@ import {
   porTipoIncidencia,
   porResponsable,
   heatmap,
+  porTiempoSolucion,
 } from '../controllers/dashboardController.js';
 
 const router = Router();
@@ -22,5 +23,6 @@ router.get('/por-centro', requireAuth, requirePermission('VER_INCIDENCIAS'), por
 router.get('/por-tipo-incidencia', requireAuth, requirePermission('VER_INCIDENCIAS'), porTipoIncidencia);
 router.get('/por-responsable', requireAuth, requirePermission('VER_INCIDENCIAS'), porResponsable);
 router.get('/heatmap', requireAuth, requirePermission('VER_INCIDENCIAS'), heatmap);
+router.get('/por-tiempo-solucion', requireAuth, requirePermission('VER_INCIDENCIAS'), porTiempoSolucion);
 
 export default router;

@@ -253,6 +253,86 @@ export async function cerrarIncidencia(id, usuarioIdSesion) {
   return await obtenerIncidenciaPorId(id);
 }
 
+/**
+ * Modifica los campos editables de una incidencia y, opcionalmente, la cierra.
+ * - Si `cerrar` es true: exige hora_fin y calcula tiempo_solucion = hora_fin - hora_inicio.
+ * - usuario_id, fecha y hora_inicio no se modifican (los define MySQL al crear).
+ */
+export async function actualizarIncidencia(id, data, usuarioIdSesion) {
+  const incidencia = await obtenerIncidenciaPorId(id);
+
+  if (!incidencia) {
+    const error = new Error('Incidencia no encontrada');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const updates = [];
+  const params = [];
+
+  const camposEditables = ['tipo_centro', 'centro', 'sistema', 'incidencia', 'responsable', 'descripcion'];
+  for (const campo of camposEditables) {
+    if (data[campo] !== undefined) {
+      updates.push(`${campo} = ?`);
+      params.push(data[campo]);
+    }
+  }
+
+  if (data.ticket !== undefined && data.ticket !== incidencia.ticket) {
+    const [dup] = await pool.query('SELECT id FROM incidencias WHERE ticket = ? AND id != ?', [data.ticket, id]);
+    if (dup.length > 0) {
+      const error = new Error('El ticket ya existe');
+      error.statusCode = 409;
+      throw error;
+    }
+    updates.push('ticket = ?');
+    params.push(data.ticket);
+  }
+
+  if (data.cerrar) {
+    if (incidencia.hora_fin !== null) {
+      const error = new Error('La incidencia ya está cerrada');
+      error.statusCode = 409;
+      throw error;
+    }
+
+    // Si no se envia hora_fin, se usa la hora actual del servidor (mismo criterio que cerrarIncidencia)
+    let horaFin = data.hora_fin;
+    if (!horaFin) {
+      const [horaActualRows] = await pool.query('SELECT CURTIME() as hora_fin');
+      horaFin = horaActualRows[0].hora_fin;
+    }
+
+    const [diff] = await pool.query('SELECT TIMEDIFF(?, ?) as tiempo_solucion', [
+      horaFin,
+      incidencia.hora_inicio,
+    ]);
+    let tiempoSolucion = diff[0].tiempo_solucion;
+
+    if (tiempoSolucion && tiempoSolucion.startsWith('-')) {
+      const [pos] = await pool.query('SELECT ADDTIME(?, "24:00:00") as tiempo_solucion', [tiempoSolucion]);
+      tiempoSolucion = pos[0].tiempo_solucion;
+    }
+
+    updates.push('hora_fin = ?', 'tiempo_solucion = ?');
+    params.push(horaFin, tiempoSolucion);
+
+    if (usuarioIdSesion !== incidencia.usuario_id) {
+      updates.push('usuario_id = ?');
+      params.push(usuarioIdSesion);
+    }
+  }
+
+  if (updates.length === 0) {
+    return incidencia;
+  }
+
+  params.push(id);
+  await pool.query(`UPDATE incidencias SET ${updates.join(', ')} WHERE id = ?`, params);
+
+  return await obtenerIncidenciaPorId(id);
+}
+
 export async function eliminarIncidencia(id) {
   const [rows] = await pool.query('SELECT id FROM incidencias WHERE id = ?', [id]);
 
@@ -266,10 +346,98 @@ export async function eliminarIncidencia(id) {
   return true;
 }
 
+/**
+ * Devuelve los valores distintos ya registrados en los campos de autocompletado,
+ * para que al crear una incidencia el usuario pueda elegir valores anteriores
+ * sin tener que escribirlos de nuevo.
+ */
+export async function obtenerValoresSugeridos() {
+  const [rows] = await pool.query(
+    `SELECT DISTINCT centro, sistema, incidencia, responsable
+     FROM incidencias
+     WHERE centro IS NOT NULL AND TRIM(centro) <> ''
+        OR sistema IS NOT NULL AND TRIM(sistema) <> ''
+        OR incidencia IS NOT NULL AND TRIM(incidencia) <> ''
+        OR responsable IS NOT NULL AND TRIM(responsable) <> ''
+     ORDER BY centro, sistema, incidencia, responsable`
+  );
+
+  const [descartados] = await pool.query(
+    'SELECT campo, valor FROM valores_sugeridos_descartados'
+  );
+
+  // Índice para descartar rápido la comprobación dentro del bucle
+  const conjuntoDescartados = new Set(descartados.map((d) => `${d.campo}::${d.valor}`));
+
+  const sugeridos = { centro: [], sistema: [], incidencia: [], responsable: [] };
+  for (const fila of rows) {
+    for (const campo of Object.keys(sugeridos)) {
+      const valor = (fila[campo] || '').trim();
+      if (!valor) continue;
+      if (conjuntoDescartados.has(`${campo}::${valor}`)) continue;
+      if (!sugeridos[campo].includes(valor)) {
+        sugeridos[campo].push(valor);
+      }
+    }
+  }
+
+  return sugeridos;
+}
+
+/**
+ * Marca un valor como descartado para que deje de aparecer en las sugerencias.
+ * No modifica ni elimina la incidencia que lo usó: solo oculta la sugerencia.
+ */
+export async function descartarValorSugerido(campo, valor) {
+  const camposValidos = ['centro', 'sistema', 'incidencia', 'responsable'];
+  if (!camposValidos.includes(campo)) {
+    const error = new Error('Campo no válido para sugerencias');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const texto = String(valor || '').trim();
+  if (!texto) {
+    const error = new Error('El valor a descartar está vacío');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  await pool.query(
+    'INSERT IGNORE INTO valores_sugeridos_descartados (campo, valor) VALUES (?, ?)',
+    [campo, texto]
+  );
+
+  return true;
+}
+
+/**
+ * Quita el descarte de un valor para que vuelva a sugerirse.
+ */
+export async function restaurarValorSugerido(campo, valor) {
+  const camposValidos = ['centro', 'sistema', 'incidencia', 'responsable'];
+  if (!camposValidos.includes(campo)) {
+    const error = new Error('Campo no válido para sugerencias');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  await pool.query(
+    'DELETE FROM valores_sugeridos_descartados WHERE campo = ? AND valor = ?',
+    [campo, String(valor || '').trim()]
+  );
+
+  return true;
+}
+
 export default {
   listarIncidencias,
   obtenerIncidenciaPorId,
+  obtenerValoresSugeridos,
+  descartarValorSugerido,
+  restaurarValorSugerido,
   crearIncidencia,
+  actualizarIncidencia,
   cerrarIncidencia,
   eliminarIncidencia,
 };

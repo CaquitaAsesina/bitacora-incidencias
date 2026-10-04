@@ -9,13 +9,52 @@ import pool from '../config/db.js';
  * - Usa índices existentes: idx_incidencias_fecha, idx_incidencias_centro, idx_incidencias_sistema
  */
 
-export async function obtenerKPIs() {
+/**
+ * Construye el filtro de rango de fechas (fecha_desde / fecha_hasta) sobre la columna fecha.
+ * Acepta formato YYYY-MM-DD. Si se envia un rango invertido, se corrige intercambiando los limites.
+ * Devuelve { sql, params } donde sql ya incluye los "AND" que apliquen.
+ */
+function filtroFechas(filtros = {}) {
+  const regex = /^\d{4}-\d{2}-\d{2}$/;
+
+  // Ignora valores con formato no ISO para no romper la consulta
+  const desde = regex.test(String(filtros.fecha_desde || '').trim()) ? String(filtros.fecha_desde).trim() : '';
+  const hasta = regex.test(String(filtros.fecha_hasta || '').trim()) ? String(filtros.fecha_hasta).trim() : '';
+
+  let sql = '';
+  const params = [];
+
+  if (desde && hasta) {
+    // Si el rango viene invertido, se corrige intercambiando los limites
+    if (desde > hasta) {
+      sql = ' AND fecha BETWEEN ? AND ?';
+      params.push(hasta, desde);
+    } else {
+      sql = ' AND fecha BETWEEN ? AND ?';
+      params.push(desde, hasta);
+    }
+  } else if (desde) {
+    sql = ' AND fecha >= ?';
+    params.push(desde);
+  } else if (hasta) {
+    sql = ' AND fecha <= ?';
+    params.push(hasta);
+  }
+
+  return { sql, params };
+}
+
+export async function obtenerKPIs(filtros) {
+  const f = filtroFechas(filtros);
+
   // Total incidencias
-  const [totalRows] = await pool.query('SELECT COUNT(*) as total FROM incidencias');
+  const [totalRows] = await pool.query(`SELECT COUNT(*) as total FROM incidencias WHERE 1=1${f.sql}`, f.params);
   const total = totalRows[0].total || 0;
 
   // Abiertas
-  const [abiertasRows] = await pool.query('SELECT COUNT(*) as abiertas FROM incidencias WHERE hora_fin IS NULL');
+  const [abiertasRows] = await pool.query(
+    `SELECT COUNT(*) as abiertas FROM incidencias WHERE hora_fin IS NULL${f.sql}`, f.params
+  );
   const abiertas = abiertasRows[0].abiertas || 0;
 
   // Cerradas
@@ -23,14 +62,17 @@ export async function obtenerKPIs() {
 
   // Tiempo promedio de resolución (en segundos, luego convertir a HH:MM:SS)
   const [promRows] = await pool.query(
-    'SELECT AVG(TIME_TO_SEC(tiempo_solucion)) as promedio_segundos FROM incidencias WHERE hora_fin IS NOT NULL AND tiempo_solucion IS NOT NULL'
+    `SELECT AVG(TIME_TO_SEC(tiempo_solucion)) as promedio_segundos FROM incidencias
+     WHERE hora_fin IS NOT NULL AND tiempo_solucion IS NOT NULL${f.sql}`, f.params
   );
   let promedioSegundos = promRows[0].promedio_segundos || 0;
   if (isNaN(promedioSegundos)) promedioSegundos = 0;
   const promedioHHMMSS = segundosAHHMMSS(Math.floor(promedioSegundos));
 
   // Incidencias hoy
-  const [hoyRows] = await pool.query('SELECT COUNT(*) as hoy FROM incidencias WHERE fecha = CURDATE()');
+  const [hoyRows] = await pool.query(
+    `SELECT COUNT(*) as hoy FROM incidencias WHERE fecha = CURDATE()${f.sql}`, f.params
+  );
   const hoy = hoyRows[0].hoy || 0;
 
   // Tasa de resolución
@@ -74,47 +116,55 @@ export async function incidenciasPorDia(dias = 30) {
   }));
 }
 
-export async function porSistema() {
+export async function porSistema(filtros) {
+  const f = filtroFechas(filtros);
   const [rows] = await pool.query(
     `SELECT sistema, COUNT(*) as total
-     FROM incidencias
+     FROM incidencias WHERE 1=1${f.sql}
      GROUP BY sistema
      ORDER BY total DESC
-     LIMIT 10`
+     LIMIT 10`,
+    f.params
   );
   return rows;
 }
 
-export async function porTipoCentro() {
+export async function porTipoCentro(filtros) {
+  const f = filtroFechas(filtros);
   const [rows] = await pool.query(
     `SELECT tipo_centro, COUNT(*) as total
-     FROM incidencias
+     FROM incidencias WHERE 1=1${f.sql}
      GROUP BY tipo_centro
-     ORDER BY total DESC`
+     ORDER BY total DESC`,
+    f.params
   );
   return rows;
 }
 
-export async function porCentro() {
+export async function porCentro(filtros) {
+  const f = filtroFechas(filtros);
   const [rows] = await pool.query(
     `SELECT 
        centro,
        COUNT(*) as total,
        SUM(CASE WHEN hora_fin IS NULL THEN 1 ELSE 0 END) as abiertas,
        SUM(CASE WHEN hora_fin IS NOT NULL THEN 1 ELSE 0 END) as cerradas
-     FROM incidencias
+     FROM incidencias WHERE 1=1${f.sql}
      GROUP BY centro
-     ORDER BY total DESC`
+     ORDER BY total DESC`,
+    f.params
   );
   return rows;
 }
 
-export async function porTipoIncidencia() {
+export async function porTipoIncidencia(filtros) {
+  const f = filtroFechas(filtros);
   const [rows] = await pool.query(
     `SELECT incidencia, COUNT(*) as total
-     FROM incidencias
+     FROM incidencias WHERE 1=1${f.sql}
      GROUP BY incidencia
-     ORDER BY total DESC`
+     ORDER BY total DESC`,
+    f.params
   );
   return rows;
 }
@@ -147,6 +197,45 @@ export async function heatmap() {
   return rows;
 }
 
+/**
+ * Incidencias cerradas ordenadas por tiempo de solución.
+ * Devuelve una fila por ticket con el tiempo en minutos para el gráfico de líneas.
+ */
+export async function porTiempoSolucion(limite = 30, filtros) {
+  const f = filtroFechas(filtros);
+
+  const [rows] = await pool.query(
+    `SELECT 
+       i.id,
+       i.ticket,
+       i.incidencia,
+       i.centro,
+       i.sistema,
+       i.fecha,
+       i.tiempo_solucion,
+       TIME_TO_SEC(i.tiempo_solucion) / 60 as minutos
+     FROM incidencias i
+     WHERE i.hora_fin IS NOT NULL
+       AND i.tiempo_solucion IS NOT NULL${f.sql}
+     ORDER BY i.fecha DESC, i.id DESC
+     LIMIT ?`,
+    [...f.params, Number(limite)]
+  );
+
+  const [stats] = await pool.query(
+    `SELECT
+       COUNT(*) as total,
+       AVG(TIME_TO_SEC(tiempo_solucion) / 60) as promedio_min,
+       MIN(TIME_TO_SEC(tiempo_solucion) / 60) as minimo_min,
+       MAX(TIME_TO_SEC(tiempo_solucion) / 60) as maximo_min
+     FROM incidencias
+     WHERE tiempo_solucion IS NOT NULL${f.sql}`,
+    f.params
+  );
+
+  return { series: rows, estadisticas: stats[0] };
+}
+
 export default {
   obtenerKPIs,
   incidenciasPorDia,
@@ -156,4 +245,5 @@ export default {
   porTipoIncidencia,
   porResponsable,
   heatmap,
+  porTiempoSolucion,
 };

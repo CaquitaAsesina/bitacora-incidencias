@@ -19,6 +19,27 @@ export async function crear(req, res, next) {
   }
 }
 
+export async function actualizar(req, res, next) {
+  try {
+    const { id } = req.params;
+    const { nombre } = req.body;
+    const permiso = await permisosService.actualizarPermiso(id, nombre);
+    res.json({ ok: true, data: permiso });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function eliminar(req, res, next) {
+  try {
+    const { id } = req.params;
+    await permisosService.eliminarPermiso(id);
+    res.json({ ok: true, mensaje: 'Permiso eliminado' });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function asignarPermisosUsuarioRol(req, res, next) {
   try {
     const { uid, rid } = req.params;

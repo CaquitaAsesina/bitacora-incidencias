@@ -74,6 +74,11 @@ app.use('/api/permisos', permisosRoutes);
 app.use('/api/incidencias', incidenciasRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 
+// Cualquier ruta /api/* desconocida devuelve 404 en JSON (no el HTML del login)
+app.use('/api', (req, res) => {
+  res.status(404).json({ ok: false, mensaje: 'Endpoint no encontrado' });
+});
+
 // Servir index.html para rutas no encontradas (SPA básica)
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'src/public/index.html'));

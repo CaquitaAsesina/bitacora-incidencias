@@ -8,7 +8,7 @@ async function cargarKPIs() {
     </div>
   `.repeat(6);
 
-  const res = await apiRequest('/dashboard/kpis');
+  const res = await apiRequest(`/dashboard/kpis${queryFiltros()}`);
   if (!res.ok) {
     container.innerHTML = '<div class="col-12">Error al cargar KPIs</div>';
     return;
@@ -61,48 +61,28 @@ async function cargarKPIs() {
   `;
 }
 
+/**
+ * Arma el query string con los filtros de fecha activos (fecha_desde / fecha_hasta).
+ * Devuelve string vacio si no hay ninguno, para no ensuciar las URLs.
+ */
+function queryFiltros() {
+  const desde = document.getElementById('fechaDesde')?.value || '';
+  const hasta = document.getElementById('fechaHasta')?.value || '';
+  const params = new URLSearchParams();
+  if (desde) params.set('fecha_desde', desde);
+  if (hasta) params.set('fecha_hasta', hasta);
+  const qs = params.toString();
+  return qs ? `?${qs}` : '';
+}
+
 async function cargarGraficos() {
-  const fechaDesde = document.getElementById('fechaDesde')?.value || '';
-  const fechaHasta = document.getElementById('fechaHasta')?.value || '';
-  const tipoCentro = document.getElementById('filtroTipoCentro')?.value || '';
+  const f = queryFiltros();
 
   // Destruir gráficos existentes
   Object.values(charts).forEach(c => c.destroy());
 
-  // Incidencias por día
-  const resPorDia = await apiRequest('/dashboard/por-dia?dias=30');
-  if (resPorDia.ok) {
-    const ctx = document.getElementById('chartPorDia').getContext('2d');
-    charts.porDia = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: resPorDia.data.map(d => d.fecha),
-        datasets: [
-          {
-            label: 'Creadas',
-            data: resPorDia.data.map(d => d.creadas),
-            borderColor: '#DC2626',
-            backgroundColor: 'rgba(220,38,38,0.1)',
-            fill: true,
-          },
-          {
-            label: 'Cerradas',
-            data: resPorDia.data.map(d => d.cerradas),
-            borderColor: '#10B981',
-            backgroundColor: 'rgba(16,185,129,0.1)',
-            fill: true,
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: true,
-      },
-    });
-  }
-
   // Por sistema
-  const resPorSistema = await apiRequest('/dashboard/por-sistema');
+  const resPorSistema = await apiRequest(`/dashboard/por-sistema${f}`);
   if (resPorSistema.ok) {
     const ctx = document.getElementById('chartPorSistema').getContext('2d');
     charts.porSistema = new Chart(ctx, {
@@ -125,7 +105,7 @@ async function cargarGraficos() {
   }
 
   // Por tipo centro
-  const resPorTipoCentro = await apiRequest('/dashboard/por-tipo-centro');
+  const resPorTipoCentro = await apiRequest(`/dashboard/por-tipo-centro${f}`);
   if (resPorTipoCentro.ok) {
     const ctx = document.getElementById('chartPorTipoCentro').getContext('2d');
     charts.porTipoCentro = new Chart(ctx, {
@@ -141,12 +121,17 @@ async function cargarGraficos() {
       },
       options: {
         responsive: true,
+        maintainAspectRatio: true,
+        aspectRatio: 1.3,
+        plugins: {
+          legend: { position: 'bottom' },
+        },
       },
     });
   }
 
   // Por centro
-  const resPorCentro = await apiRequest('/dashboard/por-centro');
+  const resPorCentro = await apiRequest(`/dashboard/por-centro${f}`);
   if (resPorCentro.ok) {
     const ctx = document.getElementById('chartPorCentro').getContext('2d');
     charts.porCentro = new Chart(ctx, {
@@ -181,7 +166,7 @@ async function cargarGraficos() {
   }
 
   // Por tipo incidencia
-  const resPorTipoIncidencia = await apiRequest('/dashboard/por-tipo-incidencia');
+  const resPorTipoIncidencia = await apiRequest(`/dashboard/por-tipo-incidencia${f}`);
   if (resPorTipoIncidencia.ok) {
     const ctx = document.getElementById('chartPorTipoIncidencia').getContext('2d');
     charts.porTipoIncidencia = new Chart(ctx, {
@@ -201,36 +186,142 @@ async function cargarGraficos() {
       },
     });
   }
-
-  // Por responsable
-  const resPorResponsable = await apiRequest('/dashboard/por-responsable');
-  if (resPorResponsable.ok) {
-    const ctx = document.getElementById('chartPorResponsable').getContext('2d');
-    charts.porResponsable = new Chart(ctx, {
-      type: 'bar',
-      data: {
-        labels: resPorResponsable.data.map(d => d.nombre_responsable),
-        datasets: [
-          {
-            label: 'Incidencias Atendidas',
-            data: resPorResponsable.data.map(d => d.total),
-            backgroundColor: '#DC2626',
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-      },
-    });
-  }
 }
 
+function formatearMinutos(valor) {
+  if (valor === null || valor === undefined) return '-';
+  const m = Number(valor);
+  if (Number.isNaN(m)) return '-';
+  if (m < 60) return `${m.toFixed(1)} min`;
+  const h = Math.floor(m / 60);
+  const rest = Math.round(m % 60);
+  return `${h}h ${rest}m`;
+}
+
+async function cargarGraficoTiempoSolucion() {
+  const filtrosTiempo = new URLSearchParams({ limite: 30 });
+  const fechas = new URLSearchParams(queryFiltros());
+  for (const [k, v] of fechas) filtrosTiempo.set(k, v);
+  const res = await apiRequest(`/dashboard/por-tiempo-solucion?${filtrosTiempo.toString()}`);
+
+  const badgeProm = document.getElementById('tiempoPromedio');
+  const badgeMin = document.getElementById('tiempoMinimo');
+  const badgeMax = document.getElementById('tiempoMaximo');
+  const canvas = document.getElementById('chartTiempoSolucion');
+  const aviso = document.getElementById('sinTiempoSolucion');
+
+  if (!res.ok) {
+    canvas.style.display = 'none';
+    aviso.style.display = 'block';
+    return;
+  }
+
+  const { series, estadisticas } = res.data;
+
+  badgeProm.textContent = `Prom: ${formatearMinutos(Number(estadisticas.promedio_min))}`;
+  badgeMin.textContent = `Mín: ${formatearMinutos(Number(estadisticas.minimo_min))}`;
+  badgeMax.textContent = `Máx: ${formatearMinutos(Number(estadisticas.maximo_min))}`;
+
+  if (series.length === 0) {
+    canvas.style.display = 'none';
+    aviso.style.display = 'block';
+    return;
+  }
+
+  canvas.style.display = '';
+  aviso.style.display = 'none';
+
+  const maxMin = Math.max(...series.map(s => Number(s.minutos)));
+  const puntoMasLento = series.reduce((max, s) => (Number(s.minutos) > Number(max.minutos) ? s : max));
+
+  charts.tiempoSolucion = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: series.map(s => s.ticket),
+      datasets: [
+        {
+          label: 'Tiempo de solución (min)',
+          data: series.map(s => Number(s.minutos)),
+          borderColor: '#DC2626',
+          backgroundColor: 'rgba(220,38,38,0.08)',
+          pointBackgroundColor: series.map(s =>
+            s.id === puntoMasLento.id ? '#DC2626' : '#3B82F6'
+          ),
+          pointRadius: series.map(s => (s.id === puntoMasLento.id ? 9 : 5)),
+          pointHoverRadius: 9,
+          borderWidth: 2,
+          tension: 0.3,
+          fill: true,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: true },
+        tooltip: {
+          callbacks: {
+            title: items => `Ticket ${items[0].label}`,
+            label: item => {
+              const s = series[item.dataIndex];
+              return [
+                `Tiempo: ${formatearMinutos(item.parsed.y)}`,
+                `Incidencia: ${s.incidencia}`,
+                `Centro: ${s.centro}`,
+                `Sistema: ${s.sistema}`,
+              ];
+            },
+          },
+        },
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          title: { display: true, text: 'Minutos' },
+        },
+        x: {
+          title: { display: true, text: 'Ticket' },
+          ticks: { maxRotation: 60, minRotation: 45, autoSkip: false },
+        },
+      },
+    },
+  });
+
+  canvas.setAttribute('title', 'Ticket más lento: ' + puntoMasLento.ticket);
+}
+
+let cargaEnCurso = false;
+
 async function cargarTodo() {
-  await cargarKPIs();
-  await cargarGraficos();
+  // Evita cargas solapadas: dos renders simultaneos dejan el canvas en uso y Chart.js lanza error
+  if (cargaEnCurso) return;
+  cargaEnCurso = true;
+
+  try {
+    await cargarKPIs();
+    await cargarGraficos();
+    await cargarGraficoTiempoSolucion();
+  } finally {
+    cargaEnCurso = false;
+  }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
   cargarTodo();
-  document.getElementById('btnFiltrar')?.addEventListener('click', cargarTodo);
+
+  document.getElementById('btnFiltrar')?.addEventListener('click', () => {
+    cargarTodo();
+  });
+
+  document.getElementById('btnLimpiar')?.addEventListener('click', () => {
+    document.getElementById('fechaDesde').value = '';
+    document.getElementById('fechaHasta').value = '';
+    cargarTodo();
+  });
+
+  ['fechaDesde', 'fechaHasta'].forEach((id) => {
+    document.getElementById(id)?.addEventListener('change', cargarTodo);
+  });
 });

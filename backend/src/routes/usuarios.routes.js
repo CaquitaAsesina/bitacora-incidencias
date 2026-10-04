@@ -6,8 +6,15 @@ import {
   crear,
   actualizar,
   eliminar,
+  listarRoles,
   asignarRol,
+  quitarRol,
   asignarPermisosPersonalizados,
+  listarPermisosDeUsuarioRol,
+  quitarPermisoDeUsuarioRol,
+  verRolPersonalizado,
+  asignarPermisosPorUsuario,
+  quitarPermisoPorUsuario,
 } from '../controllers/usuariosController.js';
 
 const router = Router();
@@ -24,7 +31,14 @@ router.get('/', requireAuth, requirePermission('VER_USUARIOS'), listar);
 router.post('/', requireAuth, requirePermission('CREAR_USUARIO'), usuarioValidation, crear);
 router.patch('/:id', requireAuth, requirePermission('CREAR_USUARIO'), actualizar);
 router.delete('/:id', requireAuth, requirePermission('CREAR_USUARIO'), eliminar);
+router.get('/:id/roles', requireAuth, requirePermission('VER_USUARIOS', 'ASIGNAR_ROLES', 'ASIGNAR_PERMISOS'), listarRoles);
 router.post('/:id/roles', requireAuth, requirePermission('ASIGNAR_ROLES'), asignarRol);
+router.delete('/:id/roles/:rid', requireAuth, requirePermission('ASIGNAR_ROLES'), quitarRol);
+router.get('/:id/permisos-personalizados', requireAuth, requirePermission('ASIGNAR_PERMISOS'), verRolPersonalizado);
+router.post('/:id/permisos-personalizados', requireAuth, requirePermission('ASIGNAR_PERMISOS'), asignarPermisosPorUsuario);
+router.delete('/:id/permisos-personalizados/:pid', requireAuth, requirePermission('ASIGNAR_PERMISOS'), quitarPermisoPorUsuario);
+router.get('/:uid/roles/:rid/permisos', requireAuth, requirePermission('ASIGNAR_PERMISOS'), listarPermisosDeUsuarioRol);
+router.delete('/:uid/roles/:rid/permisos/:pid', requireAuth, requirePermission('ASIGNAR_PERMISOS'), quitarPermisoDeUsuarioRol);
 router.post('/:uid/roles/:rid/permisos', requireAuth, requirePermission('ASIGNAR_PERMISOS'), asignarPermisosPersonalizados);
 
 export default router;

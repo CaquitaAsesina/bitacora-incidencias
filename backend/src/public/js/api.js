@@ -1,7 +1,8 @@
 const API_BASE = '/api';
 
-function getAuthHeaders() {
-  return {};
+function isLoginPage() {
+  const path = window.location.pathname;
+  return path.includes('index.html') || path === '/' || path.endsWith('/');
 }
 
 async function apiRequest(endpoint, options = {}) {
@@ -18,12 +19,16 @@ async function apiRequest(endpoint, options = {}) {
     const response = await fetch(`${API_BASE}${endpoint}`, config);
     
     if (response.status === 401) {
-      window.location.href = 'index.html';
+      if (!isLoginPage()) {
+        window.location.href = 'index.html';
+      }
       return { ok: false, mensaje: 'No autorizado' };
     }
     
     if (response.status === 403) {
-      showToast('Sin permisos para realizar esta acción', 'warning');
+      if (typeof showToast === 'function') {
+        showToast('Sin permisos para realizar esta acción', 'warning');
+      }
       return { ok: false, mensaje: 'Sin permisos' };
     }
 

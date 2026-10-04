@@ -114,9 +114,51 @@ export async function asignarPermisosAUsuarioRol(usuarioId, rolId, permisos) {
   return true;
 }
 
+export async function actualizarPermiso(id, nombre) {
+  if (!nombre) {
+    const error = new Error('Nombre de permiso requerido');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const [rows] = await pool.query('SELECT id FROM permisos WHERE id = ?', [id]);
+  if (rows.length === 0) {
+    const error = new Error('Permiso no encontrado');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const [dup] = await pool.query('SELECT id FROM permisos WHERE nombre = ? AND id != ?', [nombre, id]);
+  if (dup.length > 0) {
+    const error = new Error('El permiso ya existe');
+    error.statusCode = 409;
+    throw error;
+  }
+
+  await pool.query('UPDATE permisos SET nombre = ? WHERE id = ?', [nombre, id]);
+  const [updated] = await pool.query('SELECT * FROM permisos WHERE id = ?', [id]);
+  return updated[0];
+}
+
+export async function eliminarPermiso(id) {
+  const [rows] = await pool.query('SELECT id FROM permisos WHERE id = ?', [id]);
+  if (rows.length === 0) {
+    const error = new Error('Permiso no encontrado');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  // roles_permisos y usuarios_roles_permisos tienen ON DELETE CASCADE,
+  // por lo que las asignaciones del permiso se eliminan en cascada.
+  await pool.query('DELETE FROM permisos WHERE id = ?', [id]);
+  return true;
+}
+
 export default {
   obtenerPermisosEfectivos,
   listarPermisos,
   crearPermiso,
+  actualizarPermiso,
+  eliminarPermiso,
   asignarPermisosAUsuarioRol,
 };

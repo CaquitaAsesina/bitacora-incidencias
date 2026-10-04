@@ -99,6 +99,44 @@ export async function eliminarRol(id) {
   return true;
 }
 
+export async function listarUsuariosDeRol(rolId) {
+  const rol = await obtenerRolPorId(rolId);
+  if (!rol) {
+    const error = new Error('Rol no encontrado');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const [rows] = await pool.query(
+    `SELECT u.id, u.usuario, u.nombre, u.apellido, u.email, u.habilitado
+     FROM usuarios_roles ur
+     INNER JOIN usuarios u ON u.id = ur.usuario_id
+     WHERE ur.rol_id = ?
+     ORDER BY u.usuario`,
+    [rolId]
+  );
+  return rows;
+}
+
+export async function listarPermisosDeRol(id) {
+  const rol = await obtenerRolPorId(id);
+  if (!rol) {
+    const error = new Error('Rol no encontrado');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const [rows] = await pool.query(
+    `SELECT p.id, p.nombre
+     FROM roles_permisos rp
+     INNER JOIN permisos p ON p.id = rp.permiso_id
+     WHERE rp.rol_id = ?
+     ORDER BY p.nombre`,
+    [id]
+  );
+  return rows;
+}
+
 export async function asignarPermisosRol(id, permisos) {
   const rol = await obtenerRolPorId(id);
   if (!rol) {
@@ -125,11 +163,36 @@ export async function asignarPermisosRol(id, permisos) {
   return true;
 }
 
+export async function quitarPermisoDeRol(id, permisoId) {
+  const rol = await obtenerRolPorId(id);
+  if (!rol) {
+    const error = new Error('Rol no encontrado');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const [result] = await pool.query(
+    'DELETE FROM roles_permisos WHERE rol_id = ? AND permiso_id = ?',
+    [id, permisoId]
+  );
+
+  if (result.affectedRows === 0) {
+    const error = new Error('El rol no tiene ese permiso asignado');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  return true;
+}
+
 export default {
   listarRoles,
   obtenerRolPorId,
   crearRol,
   actualizarRol,
   eliminarRol,
+  listarUsuariosDeRol,
+  listarPermisosDeRol,
   asignarPermisosRol,
+  quitarPermisoDeRol,
 };

@@ -37,15 +37,13 @@
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 py-4">
                 <div class="d-flex justify-content-between align-items-center mb-4">
                     <h2>Dashboard</h2>
-                    <div class="d-flex gap-2">
+                    <div class="d-flex gap-2 align-items-center">
+                        <label for="fechaDesde" class="form-label form-label-sm mb-0 text-muted">Desde</label>
                         <input type="date" class="form-control form-control-sm" id="fechaDesde">
+                        <label for="fechaHasta" class="form-label form-label-sm mb-0 text-muted">Hasta</label>
                         <input type="date" class="form-control form-control-sm" id="fechaHasta">
-                        <select class="form-select form-select-sm" id="filtroTipoCentro">
-                            <option value="">Todos</option>
-                            <option value="DISTRIBUCION">Distribución</option>
-                            <option value="TRANSFERENCIA">Transferencia</option>
-                        </select>
                         <button class="btn btn-sm btn-danger" id="btnFiltrar">Filtrar</button>
+                        <button class="btn btn-sm btn-secondary" id="btnLimpiar">Limpiar</button>
                     </div>
                 </div>
 
@@ -62,16 +60,6 @@
                     <div class="col-lg-6">
                         <div class="card h-100">
                             <div class="card-header bg-white">
-                                <h6 class="mb-0">Incidencias por Día (Últimos 30 días)</h6>
-                            </div>
-                            <div class="card-body">
-                                <canvas id="chartPorDia"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-lg-6">
-                        <div class="card h-100">
-                            <div class="card-header bg-white">
                                 <h6 class="mb-0">Top 10 Sistemas con más Incidencias</h6>
                             </div>
                             <div class="card-body">
@@ -85,7 +73,9 @@
                                 <h6 class="mb-0">Distribución por Tipo de Centro</h6>
                             </div>
                             <div class="card-body">
-                                <canvas id="chartPorTipoCentro"></canvas>
+                                <div style="max-width: 300px; margin: 0 auto;">
+                                    <canvas id="chartPorTipoCentro"></canvas>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -109,13 +99,25 @@
                             </div>
                         </div>
                     </div>
-                    <div class="col-lg-6">
-                        <div class="card h-100">
-                            <div class="card-header bg-white">
-                                <h6 class="mb-0">Top Responsables Actuales</h6>
+                </div>
+
+                <!-- Evolución del Tiempo de Solución por Ticket -->
+                <div class="row g-4 mt-0">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                <h6 class="mb-0">Tiempo de Solución por Ticket</h6>
+                                <div class="d-flex gap-2 align-items-center">
+                                    <span class="badge bg-secondary" id="tiempoPromedio">Prom: -</span>
+                                    <span class="badge bg-success" id="tiempoMinimo">Mín: -</span>
+                                    <span class="badge bg-danger" id="tiempoMaximo">Máx: -</span>
+                                </div>
                             </div>
                             <div class="card-body">
-                                <canvas id="chartPorResponsable"></canvas>
+                                <canvas id="chartTiempoSolucion"></canvas>
+                                <p class="text-muted small mb-0 mt-2" id="sinTiempoSolucion" style="display: none;">
+                                    No hay incidencias cerradas con tiempo de solución registrado.
+                                </p>
                             </div>
                         </div>
                     </div>

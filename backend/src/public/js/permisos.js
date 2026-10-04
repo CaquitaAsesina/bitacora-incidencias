@@ -1,13 +1,369 @@
+let permisosData = [];
+let rolesData = [];
+let usuariosData = [];
+let filtroNombreActual = '';
+const modalPermiso = new bootstrap.Modal(document.getElementById('modalPermiso'));
+const modalAsignarPermisosRol = new bootstrap.Modal(document.getElementById('modalAsignarPermisosRol'));
+const modalAsignarPermisosUsuario = new bootstrap.Modal(document.getElementById('modalAsignarPermisosUsuario'));
+
 document.addEventListener('DOMContentLoaded', async () => {
   await checkAuth();
-  const res = await apiRequest('/permisos');
-  if (res.ok) {
-    const tbody = document.getElementById('tablaPermisosBody');
-    tbody.innerHTML = res.data.map(p => `
-      <tr>
-        <td>${p.id}</td>
-        <td>${p.nombre}</td>
-      </tr>
-    `).join('');
+  
+  if (hasPermission('CREAR_PERMISOS')) {
+    document.getElementById('btnNuevoPermiso').style.display = 'inline-block';
+    document.getElementById('btnNuevoPermiso').addEventListener('click', abrirModalNuevoPermiso);
+    document.getElementById('btnGuardarPermiso').addEventListener('click', guardarPermiso);
   }
+  
+  if (hasPermission('ASIGNAR_PERMISOS')) {
+    document.getElementById('btnAsignarPermisosRol').style.display = 'inline-block';
+    document.getElementById('btnAsignarPermisosUsuario').style.display = 'inline-block';
+    document.getElementById('btnAsignarPermisosRol').addEventListener('click', abrirAsignarPermisosRol);
+    document.getElementById('btnAsignarPermisosUsuario').addEventListener('click', abrirAsignarPermisosUsuario);
+    document.getElementById('btnGuardarAsignacionRol').addEventListener('click', guardarAsignacionPermisosRol);
+    document.getElementById('btnGuardarAsignacionUsuario').addEventListener('click', guardarAsignacionPermisosUsuario);
+  }
+  
+  document.getElementById('btnFiltrar').addEventListener('click', () => {
+    filtroNombreActual = document.getElementById('filtroNombre').value;
+    renderTablaPermisos();
+  });
+
+  document.getElementById('btnLimpiar').addEventListener('click', () => {
+    document.getElementById('filtroNombre').value = '';
+    filtroNombreActual = '';
+    renderTablaPermisos();
+  });
+
+  document.getElementById('filtroNombre').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      document.getElementById('btnFiltrar').click();
+    }
+  });
+
+  await cargarDatos();
 });
+
+async function cargarDatos() {
+  const [permisosRes, rolesRes, usuariosRes] = await Promise.all([
+    apiRequest('/permisos'),
+    apiRequest('/roles'),
+    apiRequest('/usuarios'),
+  ]);
+  if (permisosRes.ok) permisosData = permisosRes.data;
+  if (rolesRes.ok) rolesData = rolesRes.data;
+  if (usuariosRes.ok) usuariosData = usuariosRes.data;
+  renderTablaPermisos();
+}
+
+function renderTablaPermisos() {
+  const tbody = document.getElementById('tablaPermisosBody');
+  tbody.innerHTML = '';
+
+  const filtro = filtroNombreActual.trim().toLowerCase();
+  const permisosFiltrados = filtro
+    ? permisosData.filter(p => p.nombre.toLowerCase().includes(filtro))
+    : permisosData;
+
+  if (permisosFiltrados.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-4">No hay permisos que coincidan con la búsqueda</td></tr>';
+    return;
+  }
+
+  permisosFiltrados.forEach(p => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${p.id}</td>
+      <td>${p.nombre}</td>
+      <td>
+        ${hasPermission('CREAR_PERMISOS') ? `<button class="btn btn-sm btn-primary" onclick="editarPermiso(${p.id})"><i class="bi bi-pencil"></i> Modificar</button>` : ''}
+        ${hasPermission('CREAR_PERMISOS') ? `<button class="btn btn-sm btn-danger ms-1" onclick="eliminarPermiso(${p.id})"><i class="bi bi-trash"></i> Eliminar</button>` : ''}
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function abrirModalNuevoPermiso() {
+  document.getElementById('modalPermisoTitle').textContent = 'Nuevo Permiso';
+  document.getElementById('formPermiso').reset();
+  document.getElementById('permisoId').value = '';
+  modalPermiso.show();
+}
+
+window.editarPermiso = function (id) {
+  const permiso = permisosData.find((p) => p.id === id);
+  if (!permiso) return;
+  document.getElementById('modalPermisoTitle').textContent = 'Modificar Permiso';
+  document.getElementById('permisoId').value = permiso.id;
+  document.getElementById('nombrePermiso').value = permiso.nombre;
+  modalPermiso.show();
+};
+
+window.eliminarPermiso = async function (id) {
+  const permiso = permisosData.find((p) => p.id === id);
+  const nombre = permiso ? permiso.nombre : id;
+  if (!confirm(`¿Eliminar el permiso "${nombre}"?\nSe quitará de todos los roles y usuarios que lo tengan asignado.`)) return;
+
+  const res = await apiRequest(`/permisos/${id}`, { method: 'DELETE' });
+  if (res.ok) {
+    showToast('Permiso eliminado', 'success');
+    await cargarDatos();
+  } else {
+    showToast(res.mensaje || 'Error al eliminar el permiso', 'error');
+  }
+};
+
+async function guardarPermiso() {
+  const id = document.getElementById('permisoId').value;
+  const nombre = document.getElementById('nombrePermiso').value;
+  if (!nombre) return;
+
+  let res;
+  if (id) {
+    res = await apiRequest(`/permisos/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ nombre }),
+    });
+  } else {
+    res = await apiRequest('/permisos', {
+      method: 'POST',
+      body: JSON.stringify({ nombre }),
+    });
+  }
+
+  if (res.ok) {
+    showToast(id ? 'Permiso modificado' : 'Permiso creado', 'success');
+    modalPermiso.hide();
+    document.getElementById('formPermiso').reset();
+    await cargarDatos();
+  } else {
+    showToast(res.mensaje || 'Error al guardar permiso', 'error');
+  }
+}
+
+function abrirAsignarPermisosRol() {
+  const selectRol = document.getElementById('selectRolSistema');
+  selectRol.innerHTML = '<option value="">Seleccionar rol SISTEMA...</option>';
+  rolesData.forEach(r => {
+    if (r.tipo === 'SISTEMA') {
+      selectRol.innerHTML += `<option value="${r.id}">${r.nombre}</option>`;
+    }
+  });
+  const container = document.getElementById('permisosRolContainer');
+  container.innerHTML = '';
+  permisosData.forEach(p => {
+    const div = document.createElement('div');
+    div.className = 'form-check';
+    div.innerHTML = `
+      <input class="form-check-input perm-rol-check" type="checkbox" value="${p.id}" id="pr_${p.id}">
+      <label class="form-check-label" for="pr_${p.id}">${p.nombre}</label>
+    `;
+    container.appendChild(div);
+  });
+
+  document.getElementById('permisosRolAsignados').innerHTML = '';
+  document.getElementById('selectRolSistema').onchange = () => cargarAsignadosRolSistema();
+  modalAsignarPermisosRol.show();
+}
+
+async function cargarAsignadosRolSistema() {
+  const rolId = document.getElementById('selectRolSistema').value;
+  const chips = document.getElementById('permisosRolAsignados');
+  const checks = document.querySelectorAll('.perm-rol-check');
+  checks.forEach(cb => (cb.checked = false));
+  chips.innerHTML = '<span class="text-muted">Seleccione un rol...</span>';
+
+  if (!rolId) return;
+
+  chips.innerHTML = '<span class="text-muted">Cargando...</span>';
+  const res = await apiRequest(`/roles/${rolId}/permisos`);
+  if (!res.ok) {
+    chips.innerHTML = `<span class="text-danger">${res.mensaje || 'Error al cargar permisos del rol'}</span>`;
+    return;
+  }
+
+  const asignados = res.data || [];
+  if (asignados.length === 0) {
+    chips.innerHTML = '<span class="text-muted">Este rol no tiene permisos asignados.</span>';
+    return;
+  }
+
+  const porId = new Set(asignados.map(p => p.id));
+  checks.forEach(cb => {
+    cb.checked = porId.has(parseInt(cb.value, 10));
+  });
+
+  chips.innerHTML = '';
+  asignados.forEach(p => {
+    const div = document.createElement('div');
+    div.className = 'd-flex justify-content-between align-items-center border rounded px-2 py-1 bg-success bg-opacity-10';
+    div.style.minWidth = '260px';
+    div.innerHTML = `
+      <span>${p.nombre}</span>
+      <button type="button" class="btn btn-sm btn-outline-danger"
+        onclick="quitarPermisoDeRolSistema(${rolId}, ${p.id}, '${p.nombre}')">
+        <i class="bi bi-x-circle"></i> Quitar
+      </button>`;
+    chips.appendChild(div);
+  });
+}
+
+window.quitarPermisoDeRolSistema = async function (rolId, permisoId, nombre) {
+  const res = await apiRequest(`/roles/${rolId}/permisos/${permisoId}`, { method: 'DELETE' });
+  if (res.ok) {
+    showToast(`Permiso ${nombre} quitado del rol`, 'success');
+    await cargarAsignadosRolSistema();
+  } else {
+    showToast(res.mensaje || 'Error al quitar permiso del rol', 'error');
+  }
+};
+
+async function guardarAsignacionPermisosRol() {
+  const rolId = document.getElementById('selectRolSistema').value;
+  if (!rolId) {
+    showToast('Seleccione un rol SISTEMA', 'warning');
+    return;
+  }
+  const checkboxes = document.querySelectorAll('.perm-rol-check:checked');
+  const permisos = Array.from(checkboxes).map(cb => parseInt(cb.value));
+  const res = await apiRequest(`/roles/${rolId}/permisos`, {
+    method: 'POST',
+    body: JSON.stringify({ permisos }),
+  });
+  if (res.ok) {
+    showToast('Permisos asignados al rol', 'success');
+    modalAsignarPermisosRol.hide();
+  } else {
+    showToast(res.mensaje || 'Error al asignar permisos', 'error');
+  }
+}
+
+async function abrirAsignarPermisosUsuario() {
+  const selectUsuario = document.getElementById('selectUsuarioPerm');
+  selectUsuario.innerHTML = '<option value="">Seleccionar usuario...</option>';
+  usuariosData.forEach(u => {
+    const roles = (u.roles || []).map(r => r.nombre).join(', ') || 'sin roles';
+    selectUsuario.innerHTML += `<option value="${u.id}">${u.usuario} - ${u.nombre} ${u.apellido} [${roles}]</option>`;
+  });
+
+  selectUsuario.onchange = () => cargarRolPersonalizadoDelUsuario();
+
+  const container = document.getElementById('permisosUsuarioContainer');
+  container.innerHTML = '';
+  permisosData.forEach(p => {
+    const div = document.createElement('div');
+    div.className = 'form-check';
+    div.innerHTML = `
+      <input class="form-check-input perm-usu-check" type="checkbox" value="${p.id}" id="pu_${p.id}">
+      <label class="form-check-label" for="pu_${p.id}">${p.nombre}</label>
+    `;
+    container.appendChild(div);
+  });
+
+  limpiarPermisosUsuario();
+  modalAsignarPermisosUsuario.show();
+}
+
+function limpiarPermisosUsuario() {
+  document.querySelectorAll('.perm-usu-check').forEach(cb => (cb.checked = false));
+  const chips = document.getElementById('permisosUsuarioAsignados');
+  if (chips) chips.innerHTML = '';
+  document.getElementById('rolPersonalizadoResuelto').value = '';
+  const btn = document.getElementById('btnGuardarAsignacionUsuario');
+  if (btn) btn.disabled = true;
+}
+
+async function cargarRolPersonalizadoDelUsuario() {
+  const usuarioId = document.getElementById('selectUsuarioPerm').value;
+  const campoRol = document.getElementById('rolPersonalizadoResuelto');
+  const chips = document.getElementById('permisosUsuarioAsignados');
+  const btn = document.getElementById('btnGuardarAsignacionUsuario');
+
+  limpiarPermisosUsuario();
+
+  if (!usuarioId) return;
+
+  campoRol.value = 'Buscando rol PERSONALIZADO...';
+  chips.innerHTML = '<span class="text-muted">Cargando...</span>';
+
+  const res = await apiRequest(`/usuarios/${usuarioId}/permisos-personalizados`);
+
+  if (!res.ok) {
+    campoRol.value = '';
+    campoRol.classList.add('is-invalid');
+    btn.disabled = true;
+    chips.innerHTML = `<span class="text-danger"><i class="bi bi-exclamation-triangle"></i> ${res.mensaje}</span>`;
+    showToast(res.mensaje || 'El usuario no tiene un rol PERSONALIZADO válido', 'error');
+    return;
+  }
+
+  const { rol, permisos } = res.data;
+  campoRol.classList.remove('is-invalid');
+  campoRol.value = `${rol.nombre} (${rol.tipo})`;
+  btn.disabled = false;
+
+  if (!permisos || permisos.length === 0) {
+    chips.innerHTML = '<span class="text-muted">Este usuario no tiene permisos asignados. Marque los que quiera agregar.</span>';
+    return;
+  }
+
+  const porId = new Set(permisos.map(p => p.id));
+  document.querySelectorAll('.perm-usu-check').forEach(cb => {
+    cb.checked = porId.has(parseInt(cb.value, 10));
+  });
+
+  chips.innerHTML = '';
+  permisos.forEach(p => {
+    chips.appendChild(filaPermisoAsignado(p.nombre, `quitarPermisoDeUsuario(${usuarioId}, ${p.id}, '${p.nombre}')`));
+  });
+}
+
+function filaPermisoAsignado(nombre, onclickQuitar) {
+  const div = document.createElement('div');
+  div.className = 'd-flex justify-content-between align-items-center border rounded px-2 py-1 bg-success bg-opacity-10';
+  div.style.minWidth = '260px';
+  div.innerHTML = `
+    <span>${nombre}</span>
+    <button type="button" class="btn btn-sm btn-outline-danger" onclick="${onclickQuitar}">
+      <i class="bi bi-x-circle"></i> Quitar
+    </button>`;
+  return div;
+}
+
+window.quitarPermisoDeUsuario = async function (usuarioId, permisoId, nombre) {
+  const res = await apiRequest(`/usuarios/${usuarioId}/permisos-personalizados/${permisoId}`, { method: 'DELETE' });
+  if (res.ok) {
+    showToast(`Permiso ${nombre} quitado al usuario`, 'success');
+    await cargarRolPersonalizadoDelUsuario();
+  } else {
+    showToast(res.mensaje || 'Error al quitar permiso', 'error');
+  }
+};
+
+async function guardarAsignacionPermisosUsuario() {
+  const usuarioId = document.getElementById('selectUsuarioPerm').value;
+  if (!usuarioId) {
+    showToast('Seleccione un usuario', 'warning');
+    return;
+  }
+
+  const checkboxes = document.querySelectorAll('.perm-usu-check:checked');
+  const permisos = Array.from(checkboxes).map(cb => ({
+    permiso_id: parseInt(cb.value, 10),
+    concedido: true,
+  }));
+
+  const res = await apiRequest(`/usuarios/${usuarioId}/permisos-personalizados`, {
+    method: 'POST',
+    body: JSON.stringify({ permisos }),
+  });
+
+  if (res.ok) {
+    showToast(res.mensaje || 'Permisos asignados al usuario', 'success');
+    modalAsignarPermisosUsuario.hide();
+  } else {
+    showToast(res.mensaje || 'Error al asignar permisos', 'error');
+  }
+}

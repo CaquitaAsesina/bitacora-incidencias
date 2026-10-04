@@ -38,6 +38,36 @@ export async function eliminar(req, res, next) {
   }
 }
 
+export async function listarUsuariosDeRol(req, res, next) {
+  try {
+    const { id } = req.params;
+    const usuarios = await rolesService.listarUsuariosDeRol(id);
+    res.json({ ok: true, data: usuarios });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function listarPermisos(req, res, next) {
+  try {
+    const { id } = req.params;
+    const permisos = await rolesService.listarPermisosDeRol(id);
+    res.json({ ok: true, data: permisos });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function quitarPermiso(req, res, next) {
+  try {
+    const { id, pid } = req.params;
+    await rolesService.quitarPermisoDeRol(id, pid);
+    res.json({ ok: true, mensaje: 'Permiso quitado del rol' });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function asignarPermisos(req, res, next) {
   try {
     const { id } = req.params;

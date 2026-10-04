@@ -1,5 +1,20 @@
 let currentPage = 1;
 const modalIncidencia = new bootstrap.Modal(document.getElementById('modalIncidencia'));
+const modalDetalle = new bootstrap.Modal(document.getElementById('modalDetalleIncidencia'));
+const modalEditar = new bootstrap.Modal(document.getElementById('modalEditarIncidencia'));
+let incidenciaEnDetalle = null;
+
+// Campos del modal Nueva y del modal Modificar que comparten sugerencias
+const CAMPOS_SUGERIDOS = [
+  { inputId: 'centro', campo: 'centro' },
+  { inputId: 'sistema', campo: 'sistema' },
+  { inputId: 'incidencia', campo: 'incidencia' },
+  { inputId: 'responsable', campo: 'responsable' },
+  { inputId: 'editarCentro', campo: 'centro' },
+  { inputId: 'editarSistema', campo: 'sistema' },
+  { inputId: 'editarIncidencia', campo: 'incidencia' },
+  { inputId: 'editarResponsable', campo: 'responsable' },
+];
 
 document.addEventListener('DOMContentLoaded', async () => {
   const me = await checkAuth();
@@ -22,8 +37,97 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   document.getElementById('btnLimpiar').addEventListener('click', limpiarFiltros);
 
+  CAMPOS_SUGERIDOS.forEach(({ inputId, campo }) => adjuntarSugerencias(inputId, campo));
+
+  await cargarSugerencias();
   await cargarIncidencias();
 });
+
+// Valores sugeridos por campo, cargados del backend
+let sugerencias = { centro: [], sistema: [], incidencia: [], responsable: [] };
+
+async function cargarSugerencias() {
+  const res = await apiRequest('/incidencias/valores-sugeridos');
+  if (res.ok) sugerencias = res.data;
+}
+
+/**
+ * Envuelve un input en un desplegable de sugerencias con X para quitar valores.
+ * Se hace a mano porque las opciones nativas de <datalist> no admiten botones.
+ */
+function adjuntarSugerencias(inputId, campo) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'sugerencias-wrap';
+  input.parentNode.insertBefore(wrap, input);
+  wrap.appendChild(input);
+
+  const lista = document.createElement('div');
+  lista.className = 'sugerencias-lista';
+  wrap.appendChild(lista);
+
+  const cerrar = () => lista.classList.remove('mostrar');
+
+  const pintar = () => {
+    const texto = input.value.trim().toLowerCase();
+    const coincidencias = (sugerencias[campo] || [])
+      .filter((v) => !texto || v.toLowerCase().includes(texto));
+
+    lista.innerHTML = '';
+
+    if (coincidencias.length === 0) {
+      const vacio = document.createElement('div');
+      vacio.className = 'sugerencias-vacio';
+      vacio.textContent = texto ? 'Sin coincidencias' : 'Sin valores registrados';
+      lista.appendChild(vacio);
+    } else {
+      coincidencias.forEach((valor) => {
+        const item = document.createElement('div');
+        item.className = 'sugerencias-item';
+
+        const textoItem = document.createElement('span');
+        textoItem.className = 'sugerencias-texto';
+        textoItem.textContent = valor;
+        textoItem.addEventListener('click', () => {
+          input.value = valor;
+          cerrar();
+          input.focus();
+        });
+
+        const borrar = document.createElement('button');
+        borrar.type = 'button';
+        borrar.className = 'sugerencias-borrar';
+        borrar.title = `Quitar "${valor}" de las sugerencias`;
+        borrar.textContent = '×';
+        borrar.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const resp = await apiRequest('/incidencias/valores-sugeridos/descartar', {
+            method: 'POST',
+            body: JSON.stringify({ campo, valor }),
+          });
+          if (!resp.ok) {
+            showToast(resp.mensaje || 'No se pudo quitar la sugerencia', 'error');
+            return;
+          }
+          await cargarSugerencias();
+          pintar();
+        });
+
+        item.appendChild(textoItem);
+        item.appendChild(borrar);
+        lista.appendChild(item);
+      });
+    }
+
+    lista.classList.add('mostrar');
+  };
+
+  input.addEventListener('focus', pintar);
+  input.addEventListener('input', pintar);
+  input.addEventListener('blur', () => setTimeout(cerrar, 150));
+}
 
 async function cargarIncidencias() {
   const params = new URLSearchParams();
@@ -64,32 +168,35 @@ function renderTabla(incidencias) {
   tbody.innerHTML = '';
 
   if (incidencias.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="14" class="text-center">No hay incidencias</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="12" class="text-center text-muted py-4">No hay incidencias</td></tr>';
     return;
   }
 
   incidencias.forEach(inc => {
+    const abierta = inc.hora_fin === null;
     const tr = document.createElement('tr');
-    const estado = inc.hora_fin === null ? 'Abierta' : 'Cerrada';
-    const badge = inc.hora_fin === null ? 'bg-danger' : 'bg-success';
-    
     tr.innerHTML = `
       <td>${inc.id}</td>
-      <td>${inc.ticket}</td>
+      <td class="fw-semibold">${inc.ticket}</td>
       <td>${formatDate(inc.fecha)}</td>
-      <td>${inc.tipo_centro}</td>
+      <td>${inc.hora_inicio || '-'}</td>
+      <td>${inc.hora_fin || '-'}</td>
       <td>${inc.centro}</td>
       <td>${inc.sistema}</td>
       <td>${inc.incidencia}</td>
-      <td>${inc.responsable_actual_nombre || inc.usuario_id}</td>
       <td>${inc.responsable}</td>
-      <td><span class="badge ${badge}">${estado}</span></td>
-      <td>${inc.hora_inicio}</td>
-      <td>${inc.hora_fin || '-'}</td>
+      <td><span class="badge ${abierta ? 'bg-danger' : 'bg-success'}">${abierta ? 'Abierta' : 'Cerrada'}</span></td>
       <td>${inc.tiempo_solucion || '-'}</td>
-      <td>
-        ${inc.hora_fin === null && hasPermission('MODIFICAR_INCIDENCIA') ? `<button class="btn btn-sm btn-success" onclick="cerrarIncidencia(${inc.id})"><i class="bi bi-check2"></i> Cerrar</button>` : ''}
-        ${hasPermission('ELIMINAR_INCIDENCIA') ? `<button class="btn btn-sm btn-danger ms-1" onclick="eliminarIncidencia(${inc.id})"><i class="bi bi-trash"></i> Eliminar</button>` : ''}
+      <td class="text-nowrap">
+        <button class="btn btn-sm btn-outline-primary" onclick="verIncidencia(${inc.id})" title="Ver detalle">
+          <i class="bi bi-eye"></i> Ver
+        </button>
+        ${hasPermission('MODIFICAR_INCIDENCIA') ? `<button class="btn btn-sm btn-warning ms-1" onclick="abrirEditarIncidencia(${inc.id})" title="Modificar">
+          <i class="bi bi-pencil"></i>
+        </button>` : ''}
+        ${hasPermission('ELIMINAR_INCIDENCIA') ? `<button class="btn btn-sm btn-danger ms-1" onclick="eliminarIncidencia(${inc.id})" title="Eliminar">
+          <i class="bi bi-trash"></i>
+        </button>` : ''}
       </td>
     `;
     tbody.appendChild(tr);
@@ -132,6 +239,7 @@ async function guardarIncidencia() {
   if (res.ok) {
     showToast('Incidencia creada correctamente', 'success');
     modalIncidencia.hide();
+    await cargarSugerencias();
     await cargarIncidencias();
   } else {
     showToast(res.mensaje || 'Error al crear incidencia', 'error');
@@ -186,4 +294,142 @@ function limpiarFiltros() {
 function formatDate(dateStr) {
   const d = new Date(dateStr);
   return d.toLocaleDateString('es-ES');
+}
+
+// ---------- Ver detalle ----------
+
+window.verIncidencia = async function (id) {
+  const res = await apiRequest(`/incidencias/${id}`);
+  if (!res.ok) {
+    showToast(res.mensaje || 'No se pudo cargar la incidencia', 'error');
+    return;
+  }
+
+  incidenciaEnDetalle = res.data;
+  const inc = res.data;
+  const abierta = inc.hora_fin === null;
+
+  document.getElementById('detalleTicket').textContent = inc.ticket;
+  const badge = document.getElementById('detalleEstado');
+  badge.textContent = abierta ? 'ABIERTA' : 'CERRADA';
+  badge.className = `badge fs-6 ${abierta ? 'bg-danger' : 'bg-success'}`;
+
+  document.getElementById('detalleDatos').innerHTML = [
+    ['Tipo de centro', inc.tipo_centro],
+    ['Centro', inc.centro],
+    ['Sistema', inc.sistema],
+    ['Incidencia', inc.incidencia],
+    ['Responsable', inc.responsable],
+    ['Registrado por', inc.responsable_actual_nombre || '-'],
+  ].map(([k, v]) => `
+      <div class="col-md-4">
+        <div class="text-muted small text-uppercase">${k}</div>
+        <div class="fw-semibold">${escaparHtml(v)}</div>
+      </div>`).join('');
+
+  document.getElementById('detalleTiempos').innerHTML = [
+    ['Fecha', formatDate(inc.fecha)],
+    ['Hora de inicio', inc.hora_inicio || '-'],
+    ['Hora de fin', inc.hora_fin || '-'],
+    ['Tiempo de solución', inc.tiempo_solucion || '-'],
+    ['Creado', formatDateTime(inc.creado_en)],
+    ['Última actualización', formatDateTime(inc.actualizado_en)],
+  ].map(([k, v]) => `
+      <div class="col-md-4">
+        <div class="text-muted small text-uppercase">${k}</div>
+        <div class="fw-semibold">${escaparHtml(v)}</div>
+      </div>`).join('');
+
+  document.getElementById('detalleDescripcion').textContent = inc.descripcion || '-';
+  document.getElementById('btnDetalleEditar').style.display = hasPermission('MODIFICAR_INCIDENCIA') ? '' : 'none';
+
+  modalDetalle.show();
+};
+
+document.getElementById('btnDetalleEditar').addEventListener('click', () => {
+  if (!incidenciaEnDetalle) return;
+  const id = incidenciaEnDetalle.id;
+  modalDetalle.hide();
+  abrirEditarIncidencia(id);
+});
+
+// ---------- Modificar ----------
+
+window.abrirEditarIncidencia = async function (id) {
+  const res = await apiRequest(`/incidencias/${id}`);
+  if (!res.ok) {
+    showToast(res.mensaje || 'No se pudo cargar la incidencia', 'error');
+    return;
+  }
+
+  const inc = res.data;
+  document.getElementById('editarId').value = inc.id;
+  document.getElementById('editarTipoCentro').value = inc.tipo_centro;
+  document.getElementById('editarTicket').value = inc.ticket;
+  document.getElementById('editarCentro').value = inc.centro;
+  document.getElementById('editarSistema').value = inc.sistema;
+  document.getElementById('editarIncidencia').value = inc.incidencia;
+  document.getElementById('editarResponsable').value = inc.responsable;
+  document.getElementById('editarDescripcion').value = inc.descripcion;
+  document.getElementById('editarHoraFin').value = '';
+
+  const cerrada = inc.hora_fin !== null;
+  document.getElementById('editarCerrarCampos').style.display = cerrada ? 'none' : '';
+  document.getElementById('editarCerrarAviso').style.display = cerrada ? 'block' : 'none';
+  if (cerrada) {
+    document.getElementById('editarCerrarAviso').textContent =
+      `Esta incidencia ya está cerrada (${formatDate(inc.fecha)} ${inc.hora_fin}). No se puede volver a cerrar.`;
+  }
+
+  modalEditar.show();
+};
+
+document.getElementById('btnGuardarEditarIncidencia').addEventListener('click', async () => {
+  const id = document.getElementById('editarId').value;
+  const horaFin = document.getElementById('editarHoraFin').value;
+  const camposVisibles = document.getElementById('editarCerrarCampos').style.display !== 'none';
+
+  const body = {
+    tipo_centro: document.getElementById('editarTipoCentro').value,
+    ticket: document.getElementById('editarTicket').value,
+    centro: document.getElementById('editarCentro').value,
+    sistema: document.getElementById('editarSistema').value,
+    incidencia: document.getElementById('editarIncidencia').value,
+    responsable: document.getElementById('editarResponsable').value,
+    descripcion: document.getElementById('editarDescripcion').value,
+  };
+
+  if (camposVisibles) {
+    body.cerrar = true;
+    if (horaFin) body.hora_fin = `${horaFin}:00`;
+  }
+
+  const res = await apiRequest(`/incidencias/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+
+  if (res.ok) {
+    const cerrada = res.data.hora_fin !== null;
+    showToast(cerrada ? 'Incidencia actualizada y cerrada' : 'Incidencia actualizada', 'success');
+    modalEditar.hide();
+    await cargarIncidencias();
+  } else {
+    showToast(res.mensaje || 'Error al actualizar la incidencia', 'error');
+  }
+});
+
+// ---------- helpers ----------
+
+function escaparHtml(valor) {
+  const div = document.createElement('div');
+  div.textContent = valor === null || valor === undefined ? '' : valor;
+  return div.innerHTML;
+}
+
+function formatDateTime(dateStr) {
+  if (!dateStr) return '-';
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return dateStr;
+  return d.toLocaleString('es-ES');
 }
