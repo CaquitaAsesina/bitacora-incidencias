@@ -93,8 +93,8 @@ function renderTablaRoles() {
         </button>
       </td>
       <td>
-        ${hasPermission('CREAR_ROLES') ? `<button class="btn btn-sm btn-primary" onclick="editarRol(${rol.id})"><i class="bi bi-pencil"></i> Modificar</button>` : ''}
-        ${hasPermission('CREAR_ROLES') ? `<button class="btn btn-sm btn-danger ms-1" onclick="eliminarRol(${rol.id})"><i class="bi bi-trash"></i> Eliminar</button>` : ''}
+        ${hasPermission('CREAR_ROLES') ? `<button class="btn btn-sm btn-primary" onclick="editarRol(${rol.id})" title="Modificar" aria-label="Modificar"><i class="bi bi-pencil"></i></button>` : ''}
+        ${hasPermission('CREAR_ROLES') ? `<button class="btn btn-sm btn-danger ms-1" onclick="eliminarRol(${rol.id})" title="Eliminar" aria-label="Eliminar"><i class="bi bi-trash"></i></button>` : ''}
       </td>
     `;
     tbody.appendChild(tr);
@@ -129,7 +129,7 @@ window.verUsuariosDeRol = async function (id) {
       <td>${u.nombre} ${u.apellido}</td>
       <td>${u.email}</td>
       <td>
-        ${hasPermission('ASIGNAR_ROLES') ? `<button class="btn btn-sm btn-outline-danger" onclick="quitarRolDeUsuario(${u.id}, ${id})"><i class="bi bi-x-circle"></i> Quitar Rol</button>` : ''}
+        ${hasPermission('ASIGNAR_ROLES') ? `<button class="btn btn-sm btn-outline-danger" onclick="quitarRolDeUsuario(${u.id}, ${id})" title="Quitar rol" aria-label="Quitar rol"><i class="bi bi-x-circle"></i></button>` : ''}
       </td>
     `;
     tbody.appendChild(tr);

@@ -9,6 +9,9 @@
  *     resuelve true/false, igual que window.confirm() pero no bloqueante.
  *   - Menú lateral en móvil: replica #sidebarNav en un offcanvas.
  *   - Inicializa tooltips/popovers y el auto-cierre de alertas.
+ *   - Tooltips de tabla: toda celda con dato muestra un tooltip negro con el
+ *     valor completo al pasar el mouse (aunque no esté recortado). Las celdas
+ *     de texto se recortan con "..." para no ensanchar la columna.
  *
  * Se carga con defer y DESPUÉS de api.js / layout.js. El envoltorio de
  * apiRequest se instala al interpretar el script (aún no se ha lanzado
@@ -206,7 +209,145 @@
   }
 
   // ==================================================================
-  // 6. Arranque
+  // 6. Recorte de datos en tablas + tooltip con el valor completo
+  // ==================================================================
+  // Regla: el dato de una celda nunca debe ensanchar la columna más que su
+  // encabezado. Si el texto no cabe, se recorta con "..." y al pasar el mouse
+  // aparece una cajita negra con el dato completo.
+  //
+  // Solo se aplica a celdas de TEXTO: las que contienen botones, badges,
+  // inputs o enlaces se dejan intactas para no recortar controles.
+
+  const ANCHO_MIN_CELDA = 72;   // px: evita columnas ilegiblemente estrechas
+  const ANCHO_MAX_CELDA = 260;  // px: tope para textos muy largos
+
+  let tooltipDato = null;
+  let celdaConTooltip = null;
+
+  function obtenerTooltipDato() {
+    if (!tooltipDato) {
+      tooltipDato = document.createElement('div');
+      tooltipDato.id = 'uiTooltipDato';
+      tooltipDato.className = 'ui-tooltip-dato';
+      tooltipDato.setAttribute('role', 'tooltip');
+      document.body.appendChild(tooltipDato);
+    }
+    return tooltipDato;
+  }
+
+  function mostrarTooltipDato(celda) {
+    const texto = celda.textContent.trim();
+    if (!texto) return;
+    const tip = obtenerTooltipDato();
+    tip.textContent = texto;
+
+    const rect = celda.getBoundingClientRect();
+    tip.classList.add('ui-tooltip-dato--visible');
+    // Se mide ya visible para recolocarlo dentro de la ventana.
+    const ancho = tip.offsetWidth;
+    const alto = tip.offsetHeight;
+    let x = rect.left;
+    let y = rect.bottom + 8;
+    if (x + ancho > window.innerWidth - 8) x = window.innerWidth - ancho - 8;
+    if (x < 8) x = 8;
+    if (y + alto > window.innerHeight - 8) y = rect.top - alto - 8;
+    if (y < 8) y = 8;
+    tip.style.left = x + 'px';
+    tip.style.top = y + 'px';
+    celdaConTooltip = celda;
+  }
+
+  function ocultarTooltipDato() {
+    if (tooltipDato) tooltipDato.classList.remove('ui-tooltip-dato--visible');
+    celdaConTooltip = null;
+  }
+
+  /** Ancho que ocupa el nombre de la columna (su texto, no la columna entera). */
+  function anchoEncabezado(th) {
+    const cs = window.getComputedStyle(th);
+    const sonda = document.createElement('span');
+    sonda.style.cssText =
+      'position:absolute;visibility:hidden;white-space:nowrap;top:-9999px;left:-9999px;' +
+      'font:' + cs.font + ';letter-spacing:' + cs.letterSpacing +
+      ';text-transform:' + cs.textTransform + ';';
+    sonda.textContent = th.textContent.trim();
+    document.body.appendChild(sonda);
+    const ancho = sonda.getBoundingClientRect().width;
+    sonda.remove();
+    const pad = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+    return Math.ceil(ancho + pad);
+  }
+
+  /** ¿La celda contiene controles/badges que no deben recortarse? */
+  function celdaConControles(td) {
+    return !!td.querySelector('button, a, input, select, textarea, .badge, .form-check, .spinner-border');
+  }
+
+  /** Ajusta el ancho de las celdas de texto de una tabla al de su encabezado. */
+  function ajustarTablaDatos(tabla) {
+    const ths = tabla.querySelectorAll('thead th');
+    if (!ths.length) return;
+
+    const anchos = Array.prototype.map.call(ths, function (th) {
+      return Math.min(Math.max(anchoEncabezado(th), ANCHO_MIN_CELDA), ANCHO_MAX_CELDA);
+    });
+
+    tabla.querySelectorAll('tbody tr').forEach(function (tr) {
+      Array.prototype.forEach.call(tr.children, function (td, i) {
+        if (td.hasAttribute('colspan')) return;
+        const tieneTexto = !!td.textContent.trim();
+        // Todas las celdas con dato muestran tooltip al pasar el cursor,
+        // aunque el texto quepa entero en la columna.
+        td.classList.toggle('celda-dato', tieneTexto);
+        // Solo se recortan las celdas de TEXTO (sin botones/badges).
+        const recortable = tieneTexto && !celdaConControles(td) && i < anchos.length;
+        if (recortable) {
+          td.classList.add('celda-recorta');
+          td.style.maxWidth = anchos[i] + 'px';
+        } else {
+          td.classList.remove('celda-recorta');
+          td.style.removeProperty('max-width');
+        }
+      });
+    });
+  }
+
+  function ajustarTodasLasTablas(raiz) {
+    (raiz || document).querySelectorAll('.table-responsive table').forEach(ajustarTablaDatos);
+  }
+
+  function inicializarRecorteTablas() {
+    // El tooltip se resuelve por delegación: sirve para filas creadas después.
+    document.addEventListener('mouseover', function (e) {
+      const celda = e.target.closest ? e.target.closest('td.celda-dato') : null;
+      if (!celda) { if (celdaConTooltip) ocultarTooltipDato(); return; }
+      if (celda !== celdaConTooltip) mostrarTooltipDato(celda);
+    });
+
+    document.addEventListener('mouseout', function (e) {
+      const celda = e.target.closest ? e.target.closest('td.celda-dato') : null;
+      if (celda && celda === celdaConTooltip) ocultarTooltipDato();
+    });
+
+    window.addEventListener('scroll', ocultarTooltipDato, true);
+    window.addEventListener('resize', function () {
+      ocultarTooltipDato();
+      ajustarTodasLasTablas();
+    });
+
+    ajustarTodasLasTablas();
+
+    // Las tablas se repintan tras cada petición: se reajustan solas.
+    document.querySelectorAll('.table-responsive').forEach(function (cont) {
+      new MutationObserver(function () {
+        ajustarTodasLasTablas(cont);
+        ocultarTooltipDato();
+      }).observe(cont, { childList: true, subtree: true });
+    });
+  }
+
+  // ==================================================================
+  // 7. Arranque
   // ==================================================================
   // El envoltorio se instala ya: aún no se ha lanzado ninguna petición y
   // así aplica a los handlers de DOMContentLoaded registrados por las
@@ -218,6 +359,7 @@
     inicializarModalConfirmacion();
     inicializarOffcanvasSidebar();
     inicializarComponentes();
+    inicializarRecorteTablas();
 
     // El foco inicial del login agiliza el acceso por teclado.
     if (document.body.classList.contains('ui-pagina-login')) {

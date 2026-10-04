@@ -198,8 +198,8 @@ function renderTabla(incidencias) {
       <td><span class="badge ${abierta ? 'bg-danger' : 'bg-success'}">${abierta ? 'Abierta' : 'Cerrada'}</span></td>
       <td>${inc.tiempo_solucion || '-'}</td>
       <td class="text-nowrap">
-        <button class="btn btn-sm btn-outline-primary" onclick="verIncidencia(${inc.id})" title="Ver detalle">
-          <i class="bi bi-eye"></i> Ver
+        <button class="btn btn-sm btn-outline-primary" onclick="verIncidencia(${inc.id})" title="Ver detalle" aria-label="Ver detalle">
+          <i class="bi bi-eye"></i>
         </button>
         ${hasPermission('MODIFICAR_INCIDENCIA') ? `<button class="btn btn-sm btn-warning ms-1" onclick="abrirEditarIncidencia(${inc.id})" title="Modificar">
           <i class="bi bi-pencil"></i>

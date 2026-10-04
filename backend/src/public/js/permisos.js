@@ -93,8 +93,8 @@ function renderTablaPermisos() {
       <td>${p.id}</td>
       <td>${p.nombre}</td>
       <td>
-        ${hasPermission('CREAR_PERMISOS') ? `<button class="btn btn-sm btn-primary" onclick="editarPermiso(${p.id})"><i class="bi bi-pencil"></i> Modificar</button>` : ''}
-        ${hasPermission('CREAR_PERMISOS') ? `<button class="btn btn-sm btn-danger ms-1" onclick="eliminarPermiso(${p.id})"><i class="bi bi-trash"></i> Eliminar</button>` : ''}
+        ${hasPermission('CREAR_PERMISOS') ? `<button class="btn btn-sm btn-primary" onclick="editarPermiso(${p.id})" title="Modificar" aria-label="Modificar"><i class="bi bi-pencil"></i></button>` : ''}
+        ${hasPermission('CREAR_PERMISOS') ? `<button class="btn btn-sm btn-danger ms-1" onclick="eliminarPermiso(${p.id})" title="Eliminar" aria-label="Eliminar"><i class="bi bi-trash"></i></button>` : ''}
       </td>
     `;
     tbody.appendChild(tr);
@@ -226,9 +226,9 @@ async function cargarAsignadosRolSistema() {
     div.style.minWidth = '260px';
     div.innerHTML = `
       <span>${p.nombre}</span>
-      <button type="button" class="btn btn-sm btn-outline-danger"
+      <button type="button" class="btn btn-sm btn-outline-danger" title="Quitar" aria-label="Quitar"
         onclick="quitarPermisoDeRolSistema(${rolId}, ${p.id}, '${p.nombre}')">
-        <i class="bi bi-x-circle"></i> Quitar
+        <i class="bi bi-x-circle"></i>
       </button>`;
     chips.appendChild(div);
   });
@@ -355,8 +355,8 @@ function filaPermisoAsignado(nombre, onclickQuitar) {
   div.style.minWidth = '260px';
   div.innerHTML = `
     <span>${nombre}</span>
-    <button type="button" class="btn btn-sm btn-outline-danger" onclick="${onclickQuitar}">
-      <i class="bi bi-x-circle"></i> Quitar
+    <button type="button" class="btn btn-sm btn-outline-danger" title="Quitar" aria-label="Quitar" onclick="${onclickQuitar}">
+      <i class="bi bi-x-circle"></i>
     </button>`;
   return div;
 }

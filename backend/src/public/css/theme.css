@@ -757,7 +757,47 @@ main {
 
 .table-responsive {
   border-radius: var(--ui-radio);
+  /* OJO: overflow:hidden eliminaba el scroll horizontal. Debe permitir
+     desplazarse en X y recortar en Y (para respetar el border-radius). */
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Celdas de texto largo: se recortan con "..." para no ensanchar la columna.
+   La clase la aplica js/ui.js solo a celdas de texto (no a botones/badges). */
+.table > tbody > tr > td.celda-recorta {
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Tooltip flotante (cajita negra) que muestra el dato completo al pasar el
+   mouse por una celda recortada. Lo posiciona js/ui.js. */
+.ui-tooltip-dato {
+  position: fixed;
+  z-index: 3000;
+  max-width: 340px;
+  padding: .45rem .65rem;
+  background-color: #16181D;
+  color: #FFFFFF;
+  font-family: inherit;
+  font-size: .78rem;
+  font-weight: 500;
+  line-height: 1.35;
+  border-radius: .45rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .32);
+  pointer-events: none;
+  white-space: normal;
+  word-break: break-word;
+  opacity: 0;
+  transform: translateY(2px);
+  transition: opacity .12s ease, transform .12s ease;
+}
+
+.ui-tooltip-dato.ui-tooltip-dato--visible {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 /* =====================================================================

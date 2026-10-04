@@ -127,8 +127,8 @@ function renderTablaUsuarios() {
       <td>${usuario.habilitado ? '<span class="badge bg-success">Sí</span>' : '<span class="badge bg-danger">No</span>'}</td>
       <td>${rolesHtml}</td>
       <td>
-        ${hasPermission('CREAR_USUARIO') ? `<button class="btn btn-sm btn-primary" onclick="editarUsuario(${usuario.id})"><i class="bi bi-pencil"></i> Modificar</button>` : ''}
-        ${hasPermission('CREAR_USUARIO') ? `<button class="btn btn-sm btn-danger ms-1" onclick="eliminarUsuario(${usuario.id})"><i class="bi bi-trash"></i> Eliminar</button>` : ''}
+        ${hasPermission('CREAR_USUARIO') ? `<button class="btn btn-sm btn-primary" onclick="editarUsuario(${usuario.id})" title="Modificar" aria-label="Modificar"><i class="bi bi-pencil"></i></button>` : ''}
+        ${hasPermission('CREAR_USUARIO') ? `<button class="btn btn-sm btn-danger ms-1" onclick="eliminarUsuario(${usuario.id})" title="Eliminar" aria-label="Eliminar"><i class="bi bi-trash"></i></button>` : ''}
       </td>
     `;
     tbody.appendChild(tr);
