@@ -33,6 +33,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   document.getElementById('filtroNombreRol').addEventListener('input', renderTablaRoles);
   document.getElementById('filtroTipoRol').addEventListener('change', renderTablaRoles);
+  document.getElementById('btnFiltrarRoles').addEventListener('click', renderTablaRoles);
   document.getElementById('btnLimpiarFiltrosRoles').addEventListener('click', () => {
     document.getElementById('filtroNombreRol').value = '';
     document.getElementById('filtroTipoRol').value = '';

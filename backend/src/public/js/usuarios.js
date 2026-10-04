@@ -27,6 +27,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   document.getElementById('filtroRol').addEventListener('change', renderTablaUsuarios);
   document.getElementById('filtroHabilitado').addEventListener('change', renderTablaUsuarios);
+  document.getElementById('btnFiltrarUsuarios').addEventListener('click', renderTablaUsuarios);
   document.getElementById('btnLimpiarFiltrosUsuarios').addEventListener('click', () => {
     idsFiltro.forEach((id) => (document.getElementById(id).value = ''));
     document.getElementById('filtroRol').value = '';
