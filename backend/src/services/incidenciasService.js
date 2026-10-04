@@ -1,0 +1,275 @@
+import pool from '../config/db.js';
+
+/**
+ * MÓDULO INCIDENCIAS
+ * 
+ * REGLAS CRÍTICAS:
+ * - Al crear: usuario_id = sesion.id (nunca viene del body). responsable = texto libre del body.
+ * - fecha, hora_inicio, creado_en, actualizado_en -> MySQL (DEFAULT/ON UPDATE). 
+ * - hora_fin, tiempo_solucion -> NULL al crear.
+ * - Al cerrar: hora_fin = hora actual servidor. tiempo_solucion = HH:MM:SS (hora_fin - hora_inicio).
+ * - Si sesion.id !== usuario_id -> usuario_id = sesion.id (sobreescribe: quien cierra pasa a ser responsable)
+ * - Si sesion.id === usuario_id -> usuario_id queda igual.
+ * - responsable (VARCHAR) NUNCA se modifica en el cierre.
+ */
+export async function listarIncidencias(filtros = {}, page = 1, limit = 10) {
+  let query = `
+    SELECT 
+      i.id, i.tipo_centro, i.centro, i.sistema, i.incidencia, i.ticket,
+      i.usuario_id, i.responsable, i.descripcion, i.fecha, i.hora_inicio,
+      i.hora_fin, i.tiempo_solucion, i.creado_en, i.actualizado_en,
+      CONCAT(u.nombre, ' ', u.apellido) AS responsable_actual_nombre
+    FROM incidencias i
+    INNER JOIN usuarios u ON u.id = i.usuario_id
+    WHERE 1=1
+  `;
+  const params = [];
+
+  if (filtros.fecha_desde) {
+    query += ' AND i.fecha >= ?';
+    params.push(filtros.fecha_desde);
+  }
+  if (filtros.fecha_hasta) {
+    query += ' AND i.fecha <= ?';
+    params.push(filtros.fecha_hasta);
+  }
+  if (filtros.centro) {
+    query += ' AND i.centro LIKE ?';
+    params.push(`%${filtros.centro}%`);
+  }
+  if (filtros.tipo_centro) {
+    query += ' AND i.tipo_centro = ?';
+    params.push(filtros.tipo_centro);
+  }
+  if (filtros.sistema) {
+    query += ' AND i.sistema LIKE ?';
+    params.push(`%${filtros.sistema}%`);
+  }
+  if (filtros.incidencia) {
+    query += ' AND i.incidencia LIKE ?';
+    params.push(`%${filtros.incidencia}%`);
+  }
+  if (filtros.usuario_id) {
+    query += ' AND i.usuario_id = ?';
+    params.push(filtros.usuario_id);
+  }
+  if (filtros.responsable_texto) {
+    query += ' AND i.responsable LIKE ?';
+    params.push(`%${filtros.responsable_texto}%`);
+  }
+  if (filtros.estado) {
+    if (filtros.estado === 'abierta') {
+      query += ' AND i.hora_fin IS NULL';
+    } else if (filtros.estado === 'cerrada') {
+      query += ' AND i.hora_fin IS NOT NULL';
+    }
+  }
+  if (filtros.q) {
+    query += ' AND (i.ticket LIKE ? OR i.descripcion LIKE ?)';
+    params.push(`%${filtros.q}%`, `%${filtros.q}%`);
+  }
+
+  query += ' ORDER BY i.creado_en DESC';
+
+  const offset = (page - 1) * limit;
+  query += ' LIMIT ? OFFSET ?';
+  params.push(parseInt(limit), parseInt(offset));
+
+  const [rows] = await pool.query(query, params);
+
+  // Contar total
+  let countQuery = `
+    SELECT COUNT(*) as total
+    FROM incidencias i
+    WHERE 1=1
+  `;
+  const countParams = [];
+
+  if (filtros.fecha_desde) {
+    countQuery += ' AND i.fecha >= ?';
+    countParams.push(filtros.fecha_desde);
+  }
+  if (filtros.fecha_hasta) {
+    countQuery += ' AND i.fecha <= ?';
+    countParams.push(filtros.fecha_hasta);
+  }
+  if (filtros.centro) {
+    countQuery += ' AND i.centro LIKE ?';
+    countParams.push(`%${filtros.centro}%`);
+  }
+  if (filtros.tipo_centro) {
+    countQuery += ' AND i.tipo_centro = ?';
+    countParams.push(filtros.tipo_centro);
+  }
+  if (filtros.sistema) {
+    countQuery += ' AND i.sistema LIKE ?';
+    countParams.push(`%${filtros.sistema}%`);
+  }
+  if (filtros.incidencia) {
+    countQuery += ' AND i.incidencia LIKE ?';
+    countParams.push(`%${filtros.incidencia}%`);
+  }
+  if (filtros.usuario_id) {
+    countQuery += ' AND i.usuario_id = ?';
+    countParams.push(filtros.usuario_id);
+  }
+  if (filtros.responsable_texto) {
+    countQuery += ' AND i.responsable LIKE ?';
+    countParams.push(`%${filtros.responsable_texto}%`);
+  }
+  if (filtros.estado) {
+    if (filtros.estado === 'abierta') {
+      countQuery += ' AND i.hora_fin IS NULL';
+    } else if (filtros.estado === 'cerrada') {
+      countQuery += ' AND i.hora_fin IS NOT NULL';
+    }
+  }
+  if (filtros.q) {
+    countQuery += ' AND (i.ticket LIKE ? OR i.descripcion LIKE ?)';
+    countParams.push(`%${filtros.q}%`, `%${filtros.q}%`);
+  }
+
+  const [totalRows] = await pool.query(countQuery, countParams);
+  const total = totalRows[0].total;
+
+  return {
+    data: rows,
+    pagination: {
+      page: parseInt(page),
+      limit: parseInt(limit),
+      total,
+      totalPages: Math.ceil(total / limit),
+    },
+  };
+}
+
+export async function obtenerIncidenciaPorId(id) {
+  const [rows] = await pool.query(
+    `SELECT 
+      i.*, CONCAT(u.nombre, ' ', u.apellido) AS responsable_actual_nombre
+     FROM incidencias i
+     INNER JOIN usuarios u ON u.id = i.usuario_id
+     WHERE i.id = ?`,
+    [id]
+  );
+
+  if (rows.length === 0) {
+    return null;
+  }
+  return rows[0];
+}
+
+export async function crearIncidencia(data, usuarioIdSesion) {
+  // Validar ticket único
+  const [ticketRows] = await pool.query(
+    'SELECT id FROM incidencias WHERE ticket = ?',
+    [data.ticket]
+  );
+
+  if (ticketRows.length > 0) {
+    const error = new Error('El ticket ya existe');
+    error.statusCode = 409;
+    throw error;
+  }
+
+  // Insertar: usuario_id = sesion.id, responsable = texto libre
+  // fecha, hora_inicio, creado_en, actualizado_en -> MySQL por DEFAULT
+  const [result] = await pool.query(
+    `INSERT INTO incidencias
+      (tipo_centro, centro, sistema, incidencia, ticket, usuario_id, responsable, descripcion)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      data.tipo_centro,
+      data.centro,
+      data.sistema,
+      data.incidencia,
+      data.ticket,
+      usuarioIdSesion, // usuario_id desde sesión (nunca del body)
+      data.responsable, // texto libre
+      data.descripcion,
+    ]
+  );
+
+  return await obtenerIncidenciaPorId(result.insertId);
+}
+
+export async function cerrarIncidencia(id, usuarioIdSesion) {
+  // Obtener incidencia
+  const [rows] = await pool.query(
+    'SELECT usuario_id, hora_inicio, hora_fin FROM incidencias WHERE id = ?',
+    [id]
+  );
+
+  if (rows.length === 0) {
+    const error = new Error('Incidencia no encontrada');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const incidencia = rows[0];
+
+  if (incidencia.hora_fin !== null) {
+    const error = new Error('La incidencia ya está cerrada');
+    error.statusCode = 409;
+    throw error;
+  }
+
+  // Calcular hora_fin = hora actual del servidor
+  const [horaActualRows] = await pool.query('SELECT CURTIME() as hora_fin');
+  const horaFin = horaActualRows[0].hora_fin;
+
+  // Calcular tiempo_solucion = hora_fin - hora_inicio en formato HH:MM:SS
+  // Manejar cruce de medianoche si ocurre
+  const [tiempoSolRows] = await pool.query(
+    'SELECT TIMEDIFF(?, ?) as tiempo_solucion',
+    [horaFin, incidencia.hora_inicio]
+  );
+  let tiempoSolucion = tiempoSolRows[0].tiempo_solucion;
+
+  // Si negativo (cruce de medianoche), sumar 24h
+  if (tiempoSolucion && tiempoSolucion.startsWith('-')) {
+    const [tiempoSolPosRows] = await pool.query(
+      'SELECT ADDTIME(?, "24:00:00") as tiempo_solucion',
+      [tiempoSolucion]
+    );
+    tiempoSolucion = tiempoSolPosRows[0].tiempo_solucion;
+  }
+
+  // Determinar nuevo usuario_id: si cierra otro usuario distinto, sobreescribir
+  let nuevoUsuarioId = incidencia.usuario_id;
+  if (usuarioIdSesion !== incidencia.usuario_id) {
+    nuevoUsuarioId = usuarioIdSesion;
+  }
+
+  // Actualizar: hora_fin, tiempo_solucion, usuario_id
+  // responsable NO se modifica
+  await pool.query(
+    `UPDATE incidencias
+     SET hora_fin = ?, tiempo_solucion = ?, usuario_id = ?
+     WHERE id = ?`,
+    [horaFin, tiempoSolucion, nuevoUsuarioId, id]
+  );
+
+  return await obtenerIncidenciaPorId(id);
+}
+
+export async function eliminarIncidencia(id) {
+  const [rows] = await pool.query('SELECT id FROM incidencias WHERE id = ?', [id]);
+
+  if (rows.length === 0) {
+    const error = new Error('Incidencia no encontrada');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  await pool.query('DELETE FROM incidencias WHERE id = ?', [id]);
+  return true;
+}
+
+export default {
+  listarIncidencias,
+  obtenerIncidenciaPorId,
+  crearIncidencia,
+  cerrarIncidencia,
+  eliminarIncidencia,
+};
