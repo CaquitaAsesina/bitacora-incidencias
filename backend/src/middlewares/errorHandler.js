@@ -1,11 +1,3 @@
-export class AppError extends Error {
-  constructor(mensaje, statusCode = 500) {
-    super(mensaje);
-    this.statusCode = statusCode;
-    this.expose = true;
-  }
-}
-
 const MENSAJES_POR_CODIGO = {
   ER_DUP_ENTRY: 'Ya existe un registro con esos datos',
   ER_NO_REFERENCED_ROW_2: 'La referencia indicada no existe',

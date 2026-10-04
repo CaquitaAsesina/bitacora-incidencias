@@ -41,7 +41,7 @@ async function cargarKPIs() {
       <div class="card kpi-card text-center p-3">
         <i class="bi bi-clock fs-3 text-primary"></i>
         <h3 class="mt-2 mb-0">${kpis.tiempo_promedio_resolucion}</h3>
-        <small class="text-muted">Promedio Resolución</small>
+        <small class="text-muted">P. Resolución</small>
       </div>
     </div>
     <div class="col-md-4 col-lg-2">
@@ -231,7 +231,6 @@ async function cargarGraficoTiempoSolucion() {
   canvas.style.display = '';
   aviso.style.display = 'none';
 
-  const maxMin = Math.max(...series.map(s => Number(s.minutos)));
   const puntoMasLento = series.reduce((max, s) => (Number(s.minutos) > Number(max.minutos) ? s : max));
 
   charts.tiempoSolucion = new Chart(canvas.getContext('2d'), {

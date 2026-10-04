@@ -6,8 +6,6 @@
   --gris-claro: #F8FAFC;
   --texto-oscuro: #1F2937;
   --verde: #10B981;
-  --ambar: #F59E0B;
-  --azul: #3B82F6;
 }
 
 body {
@@ -82,10 +80,6 @@ body {
 
 .badge.bg-danger {
   background-color: var(--rojo-principal) !important;
-}
-
-.badge.bg-warning {
-  background-color: var(--ambar) !important;
 }
 
 .toast-container {

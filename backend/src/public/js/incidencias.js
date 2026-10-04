@@ -246,21 +246,6 @@ async function guardarIncidencia() {
   }
 }
 
-window.cerrarIncidencia = async (id) => {
-  if (!confirm('¿Cerrar esta incidencia?')) return;
-  
-  const res = await apiRequest(`/incidencias/${id}/cerrar`, {
-    method: 'PATCH',
-  });
-
-  if (res.ok) {
-    showToast('Incidencia cerrada correctamente', 'success');
-    await cargarIncidencias();
-  } else {
-    showToast(res.mensaje || 'Error al cerrar incidencia', 'error');
-  }
-};
-
 window.eliminarIncidencia = async (id) => {
   if (!confirm('¿Eliminar esta incidencia?')) return;
   

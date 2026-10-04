@@ -17,14 +17,15 @@ async function apiRequest(endpoint, options = {}) {
 
   try {
     const response = await fetch(`${API_BASE}${endpoint}`, config);
-    
-    if (response.status === 401) {
-      if (!isLoginPage()) {
-        window.location.href = 'index.html';
-      }
+
+    // El 401 del login es una respuesta normal (credenciales inválidas):
+    // se lee el JSON para no perder el mensaje real del backend. En el resto
+    // de páginas un 401 significa sesión expirada y redirige al login.
+    if (response.status === 401 && !isLoginPage()) {
+      window.location.href = 'index.html';
       return { ok: false, mensaje: 'No autorizado' };
     }
-    
+
     if (response.status === 403) {
       if (typeof showToast === 'function') {
         showToast('Sin permisos para realizar esta acción', 'warning');

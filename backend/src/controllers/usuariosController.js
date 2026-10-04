@@ -63,17 +63,7 @@ export async function quitarRol(req, res, next) {
   try {
     const { id, rid } = req.params;
     await usuariosService.quitarRol(id, rid);
-    res.json({ ok: true, mensaje: 'Rol quitar correctamente' });
-  } catch (error) {
-    next(error);
-  }
-}
-
-export async function listarUsuariosDeRol(req, res, next) {
-  try {
-    const { id } = req.params;
-    const usuarios = await usuariosService.listarUsuariosDeRol(id);
-    res.json({ ok: true, data: usuarios });
+    res.json({ ok: true, mensaje: 'Rol quitado correctamente' });
   } catch (error) {
     next(error);
   }
