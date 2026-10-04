@@ -1,5 +1,16 @@
+/**
+ * =====================================================================
+ * controllers/permisosController.js — Catálogo de permisos
+ * =====================================================================
+ * CRUD del catálogo de permisos + asignación de permisos por (usuario, rol).
+ * Delega toda la lógica en permisosService.
+ *
+ * Para extender: añade la función aquí y regístrala en routes/permisos.routes.js.
+ * =====================================================================
+ */
 import permisosService from '../services/permisosService.js';
 
+/** GET /api/permisos — lista todo el catálogo. */
 export async function listar(req, res, next) {
   try {
     const permisos = await permisosService.listarPermisos();
@@ -9,6 +20,7 @@ export async function listar(req, res, next) {
   }
 }
 
+/** POST /api/permisos — crea un permiso. */
 export async function crear(req, res, next) {
   try {
     const { nombre } = req.body;
@@ -19,6 +31,7 @@ export async function crear(req, res, next) {
   }
 }
 
+/** PATCH /api/permisos/:id — renombra un permiso. */
 export async function actualizar(req, res, next) {
   try {
     const { id } = req.params;
@@ -30,6 +43,7 @@ export async function actualizar(req, res, next) {
   }
 }
 
+/** DELETE /api/permisos/:id — elimina un permiso (cascada en asignaciones). */
 export async function eliminar(req, res, next) {
   try {
     const { id } = req.params;
@@ -40,6 +54,7 @@ export async function eliminar(req, res, next) {
   }
 }
 
+/** POST /api/permisos/:uid/roles/:rid/permisos — asigna permisos a un par usuario-rol. */
 export async function asignarPermisosUsuarioRol(req, res, next) {
   try {
     const { uid, rid } = req.params;

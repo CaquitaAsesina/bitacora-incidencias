@@ -1,7 +1,23 @@
+/**
+ * =====================================================================
+ * controllers/authController.js — Autenticación
+ * =====================================================================
+ * Endpoints:
+ *   login  -> valida credenciales y crea la sesión.
+ *   logout -> destruye la sesión y limpia la cookie.
+ *   me     -> devuelve usuario + roles + permisos efectivos de la sesión.
+ *
+ * Esta capa NO tiene reglas de negocio: delega en authService / permisosService
+ * y traduce el resultado a JSON.
+ *
+ * Para extender: añade aquí la función y regístrala en routes/auth.routes.js.
+ * =====================================================================
+ */
 import authService from '../services/authService.js';
 import pool from '../config/db.js';
 import permisosService from '../services/permisosService.js';
 
+/** POST /api/auth/login — autentica y abre sesión. */
 export async function login(req, res, next) {
   try {
     const { usuario, contrasena } = req.body;
@@ -22,6 +38,7 @@ export async function login(req, res, next) {
   }
 }
 
+/** POST /api/auth/logout — cierra la sesión (requiere sesión activa). */
 export async function logout(req, res, next) {
   try {
     req.session.destroy((err) => {
@@ -36,6 +53,7 @@ export async function logout(req, res, next) {
   }
 }
 
+/** GET /api/auth/me — datos de la sesión para pintar menú y permisos. */
 export async function me(req, res, next) {
   try {
     const userId = req.session.userId;

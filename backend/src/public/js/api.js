@@ -1,10 +1,48 @@
+/**
+ * =====================================================================
+ * js/api.js — Utilidades base del frontend (compartidas por todas las páginas)
+ * =====================================================================
+ * Contiene:
+ *   - apiRequest(): wrapper de fetch contra /api con manejo global de 401/403.
+ *   - paginaInicio(): decide la primera página accesible según permisos.
+ *   - showToast(): notificaciones Bootstrap.
+ *
+ * Se carga ANTES que layout.js y que el script de cada página.
+ * Para extender: agrega aquí helpers reutilizables por varias páginas.
+ * =====================================================================
+ */
 const API_BASE = '/api';
 
+/** @returns {boolean} true si estamos en la página de login. */
 function isLoginPage() {
   const path = window.location.pathname;
   return path.includes('index.html') || path === '/' || path.endsWith('/');
 }
 
+/**
+ * Devuelve la primera página accesible para un conjunto de permisos.
+ * El Dashboard solo es accesible con VER_DASHBOARD; el resto de módulos
+ * usan su permiso de visualización/gestión. Devuelve null si el usuario no
+ * tiene acceso a ninguna página.
+ */
+function paginaInicio(permisos = []) {
+  const tiene = (...perms) => perms.some((p) => permisos.includes(p));
+  if (tiene('VER_DASHBOARD')) return 'dashboard.html';
+  if (tiene('VER_INCIDENCIAS', 'CREAR_INCIDENCIA', 'MODIFICAR_INCIDENCIA', 'ELIMINAR_INCIDENCIA')) return 'incidencias.html';
+  if (tiene('VER_USUARIOS', 'CREAR_USUARIO', 'ASIGNAR_ROLES', 'ASIGNAR_PERMISOS')) return 'usuarios.html';
+  if (tiene('VER_ROLES', 'CREAR_ROLES', 'ASIGNAR_ROLES')) return 'roles.html';
+  if (tiene('VER_PERMISOS', 'CREAR_PERMISOS', 'ASIGNAR_PERMISOS')) return 'permisos.html';
+  return null;
+}
+
+/**
+ * Realiza una petición JSON a la API.
+ * Maneja globalmente: 401 (redirige al login salvo en la página de login) y
+ * 403 (avisa con toast). Devuelve siempre un objeto JSON ({ ok, ... }).
+ * @param {string} endpoint ruta relativa, p. ej. '/incidencias'.
+ * @param {RequestInit} [options]
+ * @returns {Promise<object>}
+ */
 async function apiRequest(endpoint, options = {}) {
   const config = {
     credentials: 'include',
@@ -41,6 +79,11 @@ async function apiRequest(endpoint, options = {}) {
   }
 }
 
+/**
+ * Muestra una notificación Bootstrap.
+ * @param {string} message
+ * @param {'info'|'success'|'warning'|'error'} [type]
+ */
 function showToast(message, type = 'info') {
   const toastContainer = document.getElementById('toastContainer');
   if (!toastContainer) {

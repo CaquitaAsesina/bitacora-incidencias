@@ -1,5 +1,24 @@
+/**
+ * =====================================================================
+ * js/layout.js — Layout común (barra de usuario y menú lateral)
+ * =====================================================================
+ * Responsabilidades:
+ *   - checkAuth(): valida la sesión y guarda los permisos efectivos.
+ *   - hasPermission(): consulta local de permisos (OR).
+ *   - buildSidebar(): pinta el menú según permisos del usuario.
+ *   - initLayout(): punto de entrada (DOMContentLoaded).
+ *
+ * Debe cargarse después de api.js y antes que el script de cada página.
+ * Para agregar una entrada de menú: añade un bloque en buildSidebar() con su
+ * hasPermission(...) correspondiente.
+ * =====================================================================
+ */
 let userPermissions = [];
 
+/**
+ * Verifica la sesión. Si no hay, redirige al login.
+ * @returns {Promise<object|null>} datos de /auth/me (y guarda userPermissions) o null.
+ */
 async function checkAuth() {
   const me = await apiRequest('/auth/me');
   if (!me.ok) {
@@ -10,18 +29,23 @@ async function checkAuth() {
   return me;
 }
 
+/**
+ * @param {...string} perms
+ * @returns {boolean} true si el usuario tiene AL MENOS UNO de los permisos (OR).
+ */
 function hasPermission(...perms) {
   return perms.some(p => userPermissions.includes(p));
 }
 
+/** Construye el menú lateral según los permisos y marca la página activa. */
 function buildSidebar() {
   const sidebar = document.getElementById('sidebarNav');
   if (!sidebar) return;
 
   const menuItems = [];
 
-  // Dashboard: visible si tiene VER_INCIDENCIAS (o VER_DASHBOARD si existe)
-  if (hasPermission('VER_INCIDENCIAS', 'VER_DASHBOARD')) {
+  // Dashboard: visible solo con VER_DASHBOARD
+  if (hasPermission('VER_DASHBOARD')) {
     menuItems.push({
       href: 'dashboard.html',
       icon: 'bi-speedometer2',
@@ -82,6 +106,7 @@ function buildSidebar() {
   });
 }
 
+/** Inicializa el layout: datos de usuario, logout y menú. */
 async function initLayout() {
   const userData = await checkAuth();
   if (!userData) return;

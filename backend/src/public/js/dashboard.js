@@ -1,12 +1,25 @@
+/**
+ * =====================================================================
+ * js/dashboard.js — Dashboard analítico (dashboard.html)
+ * =====================================================================
+ * Tarjetas KPI + gráficos Chart.js. Todo el módulo requiere VER_DASHBOARD:
+ * el guard de acceso está en DOMContentLoaded.
+ *
+ * Flujo: cargarTodo() -> cargarKPIs() + cargarGraficos() + cargarGraficoTiempoSolucion().
+ * Para agregar un gráfico: crea su canvas en dashboard.html, añade aquí la
+ * función de carga y llámala desde cargarTodo().
+ * =====================================================================
+ */
 let charts = {};
 
+/** Carga y pinta las tarjetas KPI (esqueleto de carga incluido). */
 async function cargarKPIs() {
   const container = document.getElementById('kpisContainer');
   container.innerHTML = `
     <div class="col-md-4 col-lg-2">
       <div class="card kpi-card skeleton" style="height: 100px;"></div>
     </div>
-  `.repeat(6);
+  `.repeat(5);
 
   const res = await apiRequest(`/dashboard/kpis${queryFiltros()}`);
   if (!res.ok) {
@@ -39,23 +52,16 @@ async function cargarKPIs() {
     </div>
     <div class="col-md-4 col-lg-2">
       <div class="card kpi-card text-center p-3">
-        <i class="bi bi-clock fs-3 text-primary"></i>
-        <h3 class="mt-2 mb-0">${kpis.tiempo_promedio_resolucion}</h3>
-        <small class="text-muted">P. Resolución</small>
-      </div>
-    </div>
-    <div class="col-md-4 col-lg-2">
-      <div class="card kpi-card text-center p-3">
-        <i class="bi bi-calendar-day fs-3 text-danger"></i>
-        <h3 class="mt-2 mb-0">${kpis.incidencias_hoy}</h3>
-        <small class="text-muted">Hoy</small>
-      </div>
-    </div>
-    <div class="col-md-4 col-lg-2">
-      <div class="card kpi-card text-center p-3">
         <i class="bi bi-percent fs-3 text-info"></i>
         <h3 class="mt-2 mb-0">${kpis.tasa_resolucion}%</h3>
         <small class="text-muted">Tasa Resolución</small>
+      </div>
+    </div>
+        <div class="col-md-4 col-lg-2">
+      <div class="card kpi-card text-center p-3">
+        <i class="bi bi-people-fill fs-3 text-primary"></i>
+        <h3 class="mt-2 mb-0">${kpis.usuarios ?? 0}</h3>
+        <small class="text-muted">Usuarios</small>
       </div>
     </div>
   `;
@@ -64,6 +70,9 @@ async function cargarKPIs() {
 /**
  * Arma el query string con los filtros de fecha activos (fecha_desde / fecha_hasta).
  * Devuelve string vacio si no hay ninguno, para no ensuciar las URLs.
+ */
+/**
+ * @returns {string} query string con los filtros de fecha activos, o ''.
  */
 function queryFiltros() {
   const desde = document.getElementById('fechaDesde')?.value || '';
@@ -75,6 +84,7 @@ function queryFiltros() {
   return qs ? `?${qs}` : '';
 }
 
+/** Carga los gráficos de barras/dona (sistema, tipo de centro, centro, tipo). */
 async function cargarGraficos() {
   const f = queryFiltros();
 
@@ -188,6 +198,11 @@ async function cargarGraficos() {
   }
 }
 
+/**
+ * Formatea minutos como 'X.X min' o 'Xh Ym'.
+ * @param {number|string|null} valor
+ * @returns {string}
+ */
 function formatearMinutos(valor) {
   if (valor === null || valor === undefined) return '-';
   const m = Number(valor);
@@ -198,6 +213,7 @@ function formatearMinutos(valor) {
   return `${h}h ${rest}m`;
 }
 
+/** Carga el gráfico de línea de tiempo de solución por ticket. */
 async function cargarGraficoTiempoSolucion() {
   const filtrosTiempo = new URLSearchParams({ limite: 30 });
   const fechas = new URLSearchParams(queryFiltros());
@@ -293,6 +309,7 @@ async function cargarGraficoTiempoSolucion() {
 
 let cargaEnCurso = false;
 
+/** Orquesta la carga completa del dashboard evitando solapamientos. */
 async function cargarTodo() {
   // Evita cargas solapadas: dos renders simultaneos dejan el canvas en uso y Chart.js lanza error
   if (cargaEnCurso) return;
@@ -307,7 +324,16 @@ async function cargarTodo() {
   }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  const userData = await checkAuth();
+  if (!userData) return; // sin sesión: checkAuth ya redirige al login
+
+  // El Dashboard solo es visible/accesible con VER_DASHBOARD
+  if (!hasPermission('VER_DASHBOARD')) {
+    window.location.href = paginaInicio(userPermissions) || 'index.html';
+    return;
+  }
+
   cargarTodo();
 
   document.getElementById('btnFiltrar')?.addEventListener('click', () => {

@@ -1,5 +1,16 @@
+/**
+ * =====================================================================
+ * js/roles.js — Gestión de roles (roles.html)
+ * =====================================================================
+ * CRUD de roles, asignación de un rol a un usuario y listado de usuarios de
+ * un rol. El conteo de usuarios por rol se deriva de usuariosData para evitar
+ * peticiones extra (evita N+1).
+ *
+ * Los botones de fila llaman funciones globales (window.*).
+ * =====================================================================
+ */
 let rolesData = [];
-let usuariosData = [];
+let usuariosData = []; // se usa para contar usuarios por rol sin pedir más datos
 const modalRol = new bootstrap.Modal(document.getElementById('modalRol'));
 const modalAsignarRolUsuario = new bootstrap.Modal(document.getElementById('modalAsignarRolUsuario'));
 const modalUsuariosRol = new bootstrap.Modal(document.getElementById('modalUsuariosRol'));
@@ -31,6 +42,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await cargarDatos();
 });
 
+/** Carga roles y usuarios en paralelo y repinta la tabla. */
 async function cargarDatos() {
   const [rolesRes, usuariosRes] = await Promise.all([
     apiRequest('/roles'),
@@ -41,6 +53,7 @@ async function cargarDatos() {
   renderTablaRoles();
 }
 
+/** @returns {object[]} roles que cumplen los filtros de nombre/tipo. */
 function rolesFiltrados() {
   const fNombre = (document.getElementById('filtroNombreRol').value || '').toLowerCase().trim();
   const fTipo = document.getElementById('filtroTipoRol').value;
@@ -52,6 +65,7 @@ function rolesFiltrados() {
   });
 }
 
+/** Pinta la tabla de roles aplicando los filtros. */
 function renderTablaRoles() {
   const filtrados = rolesFiltrados();
   const tbody = document.getElementById('tablaRolesBody');
@@ -135,6 +149,7 @@ window.quitarRolDeUsuario = async function (usuarioId, rolId) {
   }
 };
 
+/** Abre el modal en modo "nuevo rol". */
 function abrirModalNuevoRol() {
   document.getElementById('modalRolTitle').textContent = 'Nuevo Rol';
   document.getElementById('formRol').reset();
@@ -152,6 +167,7 @@ window.editarRol = function(id) {
   modalRol.show();
 };
 
+/** Guarda (crea o modifica) el rol del modal. */
 async function guardarRol() {
   const id = document.getElementById('rolId').value;
   const data = {
@@ -184,6 +200,7 @@ window.eliminarRol = async function(id) {
   }
 };
 
+/** Abre el modal de asignación de rol a usuario. */
 function abrirModalAsignarRol() {
   const selectUsuario = document.getElementById('selectUsuarioAsignar');
   selectUsuario.innerHTML = '<option value="">Seleccionar usuario...</option>';
@@ -198,6 +215,7 @@ function abrirModalAsignarRol() {
   modalAsignarRolUsuario.show();
 }
 
+/** Asigna el rol elegido al usuario elegido. */
 async function guardarAsignarRolUsuario() {
   const usuarioId = document.getElementById('selectUsuarioAsignar').value;
   const rolId = document.getElementById('selectRolAsignar').value;

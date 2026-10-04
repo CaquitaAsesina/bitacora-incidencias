@@ -2,6 +2,31 @@
 
 Aplicación web full-stack para gestionar una bitácora de incidencias con autenticación, roles y permisos, dashboard analítico y módulo de incidencias.
 
+## Estructura del Proyecto
+
+```
+backend/
+  server.js                 # entrada: Express, sesión, estáticos y /api
+  schema.sql                # esquema + datos iniciales (roles, permisos, admin)
+  src/
+    config/db.js            # pool de conexiones MySQL
+    middlewares/            # auth (requireAuth/requirePermission) y errorHandler
+    routes/                 # endpoints y guards por módulo
+    controllers/            # reciben req/res y delegan en services
+    services/               # lógica de negocio y acceso a datos
+    public/                 # frontend sin build
+      *.html                # una página por módulo (login, dashboard, ...)
+      js/                   # api.js + layout.js compartidos y un script por página
+      css/styles.css        # estilos globales
+```
+
+Cada módulo del backend sigue el mismo patrón `routes -> controllers -> services`.
+En el frontend, cada página carga `api.js` (base) y `layout.js` (menú/permisos)
+antes de su propio script.
+
+Para agregar un módulo nuevo: crea `services/xService.js`, `controllers/xController.js`
+y `routes/x.routes.js`, móntalo en `server.js`, y añade su página + script en `public/`.
+
 ## Stack Tecnológico
 
 | Capa | Tecnología |
@@ -72,9 +97,13 @@ Los listados y el dashboard que muestran "quién atiende" deben usar `usuario_id
 
 ## Observación sobre el Módulo Dashboard
 
-El catálogo inicial de permisos en `schema.sql` incluye `VER_DASHBOARD` junto con los demás permisos. Sin embargo, según el requerimiento original, si se desea un permiso exclusivo, el admin puede crearlo desde el módulo de Permisos (CREAR_PERMISOS). 
+El Dashboard es un módulo exclusivo: **solo es visible y accesible para usuarios que tienen el permiso `VER_DASHBOARD`** (`VER_INCIDENCIAS` no da acceso al Dashboard).
 
-En esta implementación, el Dashboard se muestra con `VER_INCIDENCIAS` (como se indica en el requerimiento), pero también acepta `VER_DASHBOARD` si existe.
+`VER_DASHBOARD` se incluye en el catálogo inicial de permisos en `schema.sql`. Esta regla se aplica en tres capas:
+
+1. **Backend**: todas las rutas de `/api/dashboard/*` exigen `requirePermission('VER_DASHBOARD')`.
+2. **Menú lateral** (`layout.js`): el enlace "Dashboard" solo se muestra con `VER_DASHBOARD`.
+3. **Acceso directo** (`dashboard.html`): al entrar sin `VER_DASHBOARD`, el usuario es redirigido a la primera página que sí puede ver. El login también aterriza en la primera página permitida (no siempre en el Dashboard).
 
 ## Arquitectura de Permisos
 

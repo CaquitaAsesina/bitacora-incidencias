@@ -1,4 +1,9 @@
 <!DOCTYPE html>
+<!--
+  dashboard.html — Dashboard analítico.
+  Scripts (en orden): api.js (base) -> layout.js (menú/permisos) -> dashboard.js (KPIs y gráficos).
+  Acceso: solo con permiso VER_DASHBOARD (guard en dashboard.js).
+-->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -46,8 +51,6 @@
                         <button class="btn btn-sm btn-secondary" id="btnLimpiar">Limpiar</button>
                     </div>
                 </div>
-
-                <div id="alertContainer"></div>
 
                 <!-- KPIs -->
                 <div class="row mb-4" id="kpisContainer">

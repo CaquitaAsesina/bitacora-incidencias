@@ -1,3 +1,17 @@
+/**
+ * =====================================================================
+ * js/permisos.js — Catálogo de permisos y su asignación (permisos.html)
+ * =====================================================================
+ * CRUD de permisos + asignación de permisos a roles SISTEMA (Lógica A) y a
+ * usuarios con rol PERSONALIZADO (Lógica B).
+ *
+ * El buscador de permisos filtra por nombre. Los modales generan checkboxes
+ * dinámicos de todos los permisos disponibles.
+ *
+ * Para extender: reutiliza filaPermisoAsignado() para chips de permisos
+ * concedidos y los contenedores .perm-rol-check / .perm-usu-check.
+ * =====================================================================
+ */
 let permisosData = [];
 let rolesData = [];
 let usuariosData = [];
@@ -45,6 +59,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await cargarDatos();
 });
 
+/** Carga permisos, roles y usuarios en paralelo y repinta la tabla. */
 async function cargarDatos() {
   const [permisosRes, rolesRes, usuariosRes] = await Promise.all([
     apiRequest('/permisos'),
@@ -57,6 +72,7 @@ async function cargarDatos() {
   renderTablaPermisos();
 }
 
+/** Pinta la tabla de permisos aplicando el filtro por nombre. */
 function renderTablaPermisos() {
   const tbody = document.getElementById('tablaPermisosBody');
   tbody.innerHTML = '';
@@ -85,6 +101,7 @@ function renderTablaPermisos() {
   });
 }
 
+/** Abre el modal en modo "nuevo permiso". */
 function abrirModalNuevoPermiso() {
   document.getElementById('modalPermisoTitle').textContent = 'Nuevo Permiso';
   document.getElementById('formPermiso').reset();
@@ -115,6 +132,7 @@ window.eliminarPermiso = async function (id) {
   }
 };
 
+/** Guarda (crea o modifica) el permiso del modal. */
 async function guardarPermiso() {
   const id = document.getElementById('permisoId').value;
   const nombre = document.getElementById('nombrePermiso').value;
@@ -143,6 +161,7 @@ async function guardarPermiso() {
   }
 }
 
+/** Abre el modal de asignación de permisos a un rol SISTEMA. */
 function abrirAsignarPermisosRol() {
   const selectRol = document.getElementById('selectRolSistema');
   selectRol.innerHTML = '<option value="">Seleccionar rol SISTEMA...</option>';
@@ -168,6 +187,7 @@ function abrirAsignarPermisosRol() {
   modalAsignarPermisosRol.show();
 }
 
+/** Carga y marca los permisos ya asignados al rol SISTEMA seleccionado. */
 async function cargarAsignadosRolSistema() {
   const rolId = document.getElementById('selectRolSistema').value;
   const chips = document.getElementById('permisosRolAsignados');
@@ -220,6 +240,7 @@ window.quitarPermisoDeRolSistema = async function (rolId, permisoId, nombre) {
   }
 };
 
+/** Reemplaza los permisos del rol SISTEMA con los checkboxes marcados. */
 async function guardarAsignacionPermisosRol() {
   const rolId = document.getElementById('selectRolSistema').value;
   if (!rolId) {
@@ -240,6 +261,7 @@ async function guardarAsignacionPermisosRol() {
   }
 }
 
+/** Abre el modal de permisos por usuario (Lógica B). */
 async function abrirAsignarPermisosUsuario() {
   const selectUsuario = document.getElementById('selectUsuarioPerm');
   selectUsuario.innerHTML = '<option value="">Seleccionar usuario...</option>';
@@ -266,6 +288,7 @@ async function abrirAsignarPermisosUsuario() {
   modalAsignarPermisosUsuario.show();
 }
 
+/** Reinicia el estado del modal de permisos por usuario. */
 function limpiarPermisosUsuario() {
   document.querySelectorAll('.perm-usu-check').forEach(cb => (cb.checked = false));
   const chips = document.getElementById('permisosUsuarioAsignados');
@@ -275,6 +298,7 @@ function limpiarPermisosUsuario() {
   if (btn) btn.disabled = true;
 }
 
+/** Resuelve el rol PERSONALIZADO del usuario y muestra sus permisos. */
 async function cargarRolPersonalizadoDelUsuario() {
   const usuarioId = document.getElementById('selectUsuarioPerm').value;
   const campoRol = document.getElementById('rolPersonalizadoResuelto');
@@ -320,6 +344,7 @@ async function cargarRolPersonalizadoDelUsuario() {
   });
 }
 
+/** Crea el chip de un permiso concedido con su botón de quitar. */
 function filaPermisoAsignado(nombre, onclickQuitar) {
   const div = document.createElement('div');
   div.className = 'd-flex justify-content-between align-items-center border rounded px-2 py-1 bg-success bg-opacity-10';
@@ -342,6 +367,7 @@ window.quitarPermisoDeUsuario = async function (usuarioId, permisoId, nombre) {
   }
 };
 
+/** Guarda los permisos marcados para el usuario seleccionado. */
 async function guardarAsignacionPermisosUsuario() {
   const usuarioId = document.getElementById('selectUsuarioPerm').value;
   if (!usuarioId) {

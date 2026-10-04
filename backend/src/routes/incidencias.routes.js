@@ -1,3 +1,17 @@
+/**
+ * =====================================================================
+ * routes/incidencias.routes.js — Bitácora (/api/incidencias)
+ * =====================================================================
+ * Guards por operación:
+ *   listar/detalle/sugeridos -> VER_INCIDENCIAS
+ *   crear                    -> CREAR_INCIDENCIA
+ *   modificar/cerrar         -> MODIFICAR_INCIDENCIA
+ *   eliminar                 -> ELIMINAR_INCIDENCIA
+ *
+ * El cierre se hace vía PATCH /:id con { cerrar: true }; PATCH /:id/cerrar
+ * queda disponible para usarlo directo desde otro cliente.
+ * =====================================================================
+ */
 import { Router } from 'express';
 import { body } from 'express-validator';
 import { requireAuth, requirePermission } from '../middlewares/auth.js';
@@ -5,8 +19,6 @@ import {
   listar,
   obtenerPorId,
   valoresSugeridos,
-  descartarSugerido,
-  restaurarSugerido,
   crear,
   actualizar,
   cerrar,
@@ -14,13 +26,6 @@ import {
 } from '../controllers/incidenciasController.js';
 
 const router = Router();
-
-const sugeridosValidation = [
-  body('campo')
-    .isIn(['centro', 'sistema', 'incidencia', 'responsable'])
-    .withMessage('Campo debe ser centro, sistema, incidencia o responsable'),
-  body('valor').notEmpty().trim().isLength({ max: 60 }).escape(),
-];
 
 const crearIncidenciaValidation = [
   body('tipo_centro')
@@ -53,20 +58,6 @@ const actualizarIncidenciaValidation = [
 
 router.get('/', requireAuth, requirePermission('VER_INCIDENCIAS'), listar);
 router.get('/valores-sugeridos', requireAuth, requirePermission('VER_INCIDENCIAS'), valoresSugeridos);
-router.post(
-  '/valores-sugeridos/descartar',
-  requireAuth,
-  requirePermission('MODIFICAR_INCIDENCIA'),
-  sugeridosValidation,
-  descartarSugerido
-);
-router.post(
-  '/valores-sugeridos/restaurar',
-  requireAuth,
-  requirePermission('MODIFICAR_INCIDENCIA'),
-  sugeridosValidation,
-  restaurarSugerido
-);
 router.get('/:id', requireAuth, requirePermission('VER_INCIDENCIAS'), obtenerPorId);
 router.post('/', requireAuth, requirePermission('CREAR_INCIDENCIA'), crearIncidenciaValidation, crear);
 router.patch('/:id', requireAuth, requirePermission('MODIFICAR_INCIDENCIA'), actualizarIncidenciaValidation, actualizar);

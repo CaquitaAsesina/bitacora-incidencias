@@ -1,5 +1,14 @@
+/**
+ * =====================================================================
+ * js/usuarios.js — Gestión de usuarios (usuarios.html)
+ * =====================================================================
+ * Listado con filtros, alta/modificación en modal y borrado.
+ * Los botones de fila llaman funciones globales (window.*).
+ * Los permisos que gobiernan los botones se consultan con hasPermission().
+ * =====================================================================
+ */
 let usuariosData = [];
-let rolesData = [];
+let rolesData = []; // catálogo de roles para el filtro por rol
 const modalUsuario = new bootstrap.Modal(document.getElementById('modalUsuario'));
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -28,6 +37,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await cargarDatos();
 });
 
+/** Carga roles (para el filtro) y usuarios. */
 async function cargarDatos() {
   const rolesRes = await apiRequest('/roles');
   if (rolesRes.ok) {
@@ -43,6 +53,7 @@ async function cargarDatos() {
   await cargarUsuarios();
 }
 
+/** Carga y normaliza el listado de usuarios. */
 async function cargarUsuarios() {
   const res = await apiRequest('/usuarios');
   if (res.ok) {
@@ -55,6 +66,7 @@ async function cargarUsuarios() {
   }
 }
 
+/** Normaliza texto (minúsculas y sin acentos) para búsquedas. */
 function normalizar(valor) {
   return (valor || '')
     .toString()
@@ -63,6 +75,7 @@ function normalizar(valor) {
     .replace(/[\u0300-\u036f]/g, '');
 }
 
+/** @returns {object[]} usuarios que cumplen los filtros activos. */
 function usuariosFiltrados() {
   const fUsuario = normalizar(document.getElementById('filtroUsuario').value.trim());
   const fNombre = normalizar(document.getElementById('filtroNombre').value.trim());
@@ -82,6 +95,7 @@ function usuariosFiltrados() {
   });
 }
 
+/** Pinta la tabla de usuarios aplicando los filtros. */
 function renderTablaUsuarios() {
   const filtrados = usuariosFiltrados();
   const tbody = document.getElementById('tablaUsuariosBody');
@@ -121,6 +135,7 @@ function renderTablaUsuarios() {
   });
 }
 
+/** Abre el modal en modo "nuevo usuario". */
 function abrirModalNuevo() {
   editingUsuarioId = null;
   document.getElementById('modalUsuarioTitle').textContent = 'Nuevo Usuario';
@@ -149,6 +164,7 @@ window.editarUsuario = function(id) {
   modalUsuario.show();
 };
 
+/** Guarda (crea o modifica) el usuario del modal. */
 async function guardarUsuario() {
   const data = {
     usuario: document.getElementById('usuario').value,
@@ -165,7 +181,6 @@ async function guardarUsuario() {
   if (editingUsuarioId) {
     res = await apiRequest(`/usuarios/${editingUsuarioId}`, { method: 'PATCH', body: JSON.stringify(data) });
   } else {
-    data.contrasena = data.contrasena || document.getElementById('contrasena').value;
     res = await apiRequest('/usuarios', { method: 'POST', body: JSON.stringify(data) });
   }
   if (res.ok) {

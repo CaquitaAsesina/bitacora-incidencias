@@ -1,16 +1,35 @@
+/**
+ * =====================================================================
+ * services/rolesService.js — Lógica de roles
+ * =====================================================================
+ * CRUD de roles y relación rol <-> permisos / rol <-> usuarios.
+ * Regla clave: un rol es SISTEMA (plantilla en roles_permisos, Lógica A) o
+ * PERSONALIZADO (permisos por usuario, Lógica B). Al cambiar el tipo se
+ * limpian las tablas que ya no aplican.
+ *
+ * Para extender: concentra aquí cualquier regla de negocio sobre roles.
+ * =====================================================================
+ */
 import pool from '../config/db.js';
 
+/** @returns {Promise<object[]>} todos los roles. */
 export async function listarRoles() {
   const [rows] = await pool.query('SELECT * FROM roles ORDER BY id');
   return rows;
 }
 
+/** @returns {Promise<object|null>} el rol o null si no existe. */
 export async function obtenerRolPorId(id) {
   const [rows] = await pool.query('SELECT * FROM roles WHERE id = ?', [id]);
   if (rows.length === 0) return null;
   return rows[0];
 }
 
+/**
+ * Crea un rol.
+ * @param {{ nombre: string, tipo?: 'SISTEMA'|'PERSONALIZADO' }} data
+ * @throws {Error} 400 tipo/nombre inválido, 409 nombre duplicado.
+ */
 export async function crearRol(data) {
   if (!data.nombre) {
     const error = new Error('Nombre de rol requerido');
@@ -37,6 +56,10 @@ export async function crearRol(data) {
   return await obtenerRolPorId(result.insertId);
 }
 
+/**
+ * Actualiza nombre/tipo. Al cambiar de tipo limpia la tabla de la lógica previa.
+ * @throws {Error} 404 inexistente, 400 tipo inválido, 409 nombre duplicado.
+ */
 export async function actualizarRol(id, data) {
   const rol = await obtenerRolPorId(id);
   if (!rol) {
@@ -87,6 +110,10 @@ export async function actualizarRol(id, data) {
   return await obtenerRolPorId(id);
 }
 
+/**
+ * Elimina un rol.
+ * @throws {Error} 404 si no existe.
+ */
 export async function eliminarRol(id) {
   const rol = await obtenerRolPorId(id);
   if (!rol) {
@@ -99,6 +126,7 @@ export async function eliminarRol(id) {
   return true;
 }
 
+/** @returns {Promise<object[]>} usuarios asignados al rol. */
 export async function listarUsuariosDeRol(rolId) {
   const rol = await obtenerRolPorId(rolId);
   if (!rol) {
@@ -118,6 +146,7 @@ export async function listarUsuariosDeRol(rolId) {
   return rows;
 }
 
+/** @returns {Promise<object[]>} permisos de la plantilla del rol (Lógica A). */
 export async function listarPermisosDeRol(id) {
   const rol = await obtenerRolPorId(id);
   if (!rol) {
@@ -137,6 +166,10 @@ export async function listarPermisosDeRol(id) {
   return rows;
 }
 
+/**
+ * Reemplaza la plantilla de permisos de un rol SISTEMA.
+ * @throws {Error} 404 inexistente, 400 si el rol es PERSONALIZADO.
+ */
 export async function asignarPermisosRol(id, permisos) {
   const rol = await obtenerRolPorId(id);
   if (!rol) {
@@ -163,6 +196,10 @@ export async function asignarPermisosRol(id, permisos) {
   return true;
 }
 
+/**
+ * Quita un permiso de la plantilla del rol.
+ * @throws {Error} 404 rol inexistente o permiso no asignado.
+ */
 export async function quitarPermisoDeRol(id, permisoId) {
   const rol = await obtenerRolPorId(id);
   if (!rol) {

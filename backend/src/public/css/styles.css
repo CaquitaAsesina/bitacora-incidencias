@@ -1,3 +1,15 @@
+/*
+ * =====================================================================
+ * styles.css — Estilos globales de la app
+ * =====================================================================
+ * Paleta rojo/blanco que ajusta Bootstrap 5.
+ * Secciones: variables (:root), navbar/botones, tarjetas, sidebar, tablas,
+ * badges, toasts, KPIs y skeleton de carga.
+ *
+ * Para extender: declara colores nuevos como variables en :root y reutilízalas
+ * (así mantienes una única paleta).
+ * =====================================================================
+ */
 :root {
   --rojo-principal: #DC2626;
   --rojo-oscuro: #C81E1E;

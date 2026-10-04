@@ -1,3 +1,15 @@
+/**
+ * =====================================================================
+ * routes/roles.routes.js — Roles (/api/roles)
+ * =====================================================================
+ * Guards por operación:
+ *   listar            -> VER_ROLES
+ *   crear/editar/borrar -> CREAR_ROLES
+ *   permisos del rol   -> VER_ROLES o ASIGNAR_PERMISOS (lectura)
+ *                         ASIGNAR_PERMISOS (escritura)
+ *   usuarios del rol   -> VER_ROLES o ASIGNAR_ROLES
+ * =====================================================================
+ */
 import { Router } from 'express';
 import { requireAuth, requirePermission } from '../middlewares/auth.js';
 import {

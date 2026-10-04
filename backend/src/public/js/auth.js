@@ -1,3 +1,12 @@
+/**
+ * =====================================================================
+ * js/auth.js — Pantalla de login (index.html)
+ * =====================================================================
+ * Si ya hay sesión, redirige a la primera página permitida (paginaInicio).
+ * Si no, gestiona el submit del formulario de login.
+ * Depende de api.js (apiRequest, paginaInicio).
+ * =====================================================================
+ */
 document.addEventListener('DOMContentLoaded', async () => {
   const loginForm = document.getElementById('loginForm');
   const alertContainer = document.getElementById('alertContainer');
@@ -6,7 +15,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Verificar si ya está logueado
   const me = await apiRequest('/auth/me');
   if (me.ok) {
-    window.location.href = 'dashboard.html';
+    const destino = paginaInicio(me.permisos);
+    if (destino) {
+      window.location.href = destino;
+    } else {
+      alertContainer.innerHTML = `
+        <div class="alert alert-warning">Tu usuario no tiene permisos asignados. Contacta al administrador.</div>
+      `;
+    }
     return;
   }
 
@@ -39,7 +55,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     submitBtn.disabled = false;
 
     if (response.ok) {
-      window.location.href = 'dashboard.html';
+      window.location.href = paginaInicio(response.permisos) || 'index.html';
     } else {
       alertContainer.innerHTML = `
         <div class="alert alert-danger alert-dismissible fade show">

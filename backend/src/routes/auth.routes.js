@@ -1,3 +1,12 @@
+/**
+ * =====================================================================
+ * routes/auth.routes.js — Autenticación (/api/auth)
+ * =====================================================================
+ * POST /login    público
+ * POST /logout   requireAuth
+ * GET  /me       requireAuth
+ * =====================================================================
+ */
 import { Router } from 'express';
 import { login, logout, me } from '../controllers/authController.js';
 import { requireAuth } from '../middlewares/auth.js';

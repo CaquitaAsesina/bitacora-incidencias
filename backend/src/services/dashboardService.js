@@ -1,3 +1,13 @@
+/**
+ * =====================================================================
+ * services/dashboardService.js — Consultas del dashboard
+ * =====================================================================
+ * Cada función devuelve los datos de un gráfico/tarjeta del dashboard.
+ * Los filtros de fecha (fecha_desde/fecha_hasta) se aplican con filtroFechas().
+ *
+ * Para extender: agrega aquí la consulta y exponla en dashboardController.js.
+ * =====================================================================
+ */
 import pool from '../config/db.js';
 
 /**
@@ -44,6 +54,12 @@ function filtroFechas(filtros = {}) {
   return { sql, params };
 }
 
+/**
+ * Tarjetas resumen del dashboard.
+ * @param {{ fecha_desde?: string, fecha_hasta?: string }} filtros
+ * @returns {Promise<object>} total, abiertas, cerradas, usuarios,
+ *   tiempo_promedio_resolucion, incidencias_hoy y tasa_resolucion.
+ */
 export async function obtenerKPIs(filtros) {
   const f = filtroFechas(filtros);
 
@@ -59,6 +75,10 @@ export async function obtenerKPIs(filtros) {
 
   // Cerradas
   const cerradas = total - abiertas;
+
+  // Usuarios registrados
+  const [usuariosRows] = await pool.query('SELECT COUNT(*) AS total FROM usuarios');
+  const usuarios = Number(usuariosRows[0].total) || 0;
 
   // Tiempo promedio de resolución (en segundos, luego convertir a HH:MM:SS)
   const [promRows] = await pool.query(
@@ -82,6 +102,7 @@ export async function obtenerKPIs(filtros) {
     total,
     abiertas,
     cerradas,
+    usuarios,
     tiempo_promedio_resolucion: promedioHHMMSS,
     incidencias_hoy: hoy,
     tasa_resolucion: parseFloat(tasaResolucion),
@@ -96,6 +117,10 @@ function segundosAHHMMSS(segundos) {
   return `${String(horas).padStart(2, '0')}:${String(minutos).padStart(2, '0')}:${String(segs).padStart(2, '0')}`;
 }
 
+/**
+ * Incidencias creadas/cerradas por día en los últimos `dias` días.
+ * @param {number|string} dias
+ */
 export async function incidenciasPorDia(dias = 30) {
   const [rows] = await pool.query(
     `SELECT 
@@ -116,6 +141,7 @@ export async function incidenciasPorDia(dias = 30) {
   }));
 }
 
+/** Top 10 sistemas con más incidencias. */
 export async function porSistema(filtros) {
   const f = filtroFechas(filtros);
   const [rows] = await pool.query(
@@ -129,6 +155,7 @@ export async function porSistema(filtros) {
   return rows;
 }
 
+/** Distribución por tipo de centro (DISTRIBUCION/TRANSFERENCIA). */
 export async function porTipoCentro(filtros) {
   const f = filtroFechas(filtros);
   const [rows] = await pool.query(
@@ -141,6 +168,7 @@ export async function porTipoCentro(filtros) {
   return rows;
 }
 
+/** Incidencias por centro, desglosadas en abiertas/cerradas. */
 export async function porCentro(filtros) {
   const f = filtroFechas(filtros);
   const [rows] = await pool.query(
@@ -157,6 +185,7 @@ export async function porCentro(filtros) {
   return rows;
 }
 
+/** Incidencias por tipo de incidencia. */
 export async function porTipoIncidencia(filtros) {
   const f = filtroFechas(filtros);
   const [rows] = await pool.query(
@@ -169,6 +198,7 @@ export async function porTipoIncidencia(filtros) {
   return rows;
 }
 
+/** Top 10 responsables agrupados por usuario_id (JOIN usuarios). */
 export async function porResponsable() {
   // Top responsables: agrupa por usuario_id, JOIN usuarios
   const [rows] = await pool.query(
@@ -185,6 +215,7 @@ export async function porResponsable() {
   return rows;
 }
 
+/** Matriz día de la semana x hora con el conteo de incidencias. */
 export async function heatmap() {
   const [rows] = await pool.query(
     `SELECT 

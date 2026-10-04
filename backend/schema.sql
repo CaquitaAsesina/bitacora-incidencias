@@ -220,7 +220,7 @@ INSERT IGNORE INTO usuarios
     (usuario, contrasena, nombre, apellido, email, telefono, habilitado)
 VALUES (
     'admin',
-    '$2y$10$e0MYzXyjpJS7Pd0RVvHwHe1HlWpIhZ0FfLhLz9X4o1yG8kUqXq9S',  -- admin123
+    '$2b$10$kP8pFh0lysUsmzmBM6m1SeAxY9F6ILXi1JQ5YpnxxEEn6mXhDs9Dm',  -- admin123
     'Jhostin',
     'Alvarez',
     'Jhostin.Alvarez@farmacias.peruanas.pe',
@@ -245,20 +245,3 @@ SELECT r.id, p.id
 FROM roles r
 CROSS JOIN permisos p
 WHERE r.nombre = 'ADMINISTRADOR';
--- ============================================================
--- Valores descartados de las listas de sugerencias
--- ------------------------------------------------------------
--- Cuando el usuario quita un valor de las sugerencias (por ejemplo, un centro
--- registrado con error), se guarda aquí para no volver a ofrecerlo.
--- No se borra la incidencia: solo deja de sugerirse el valor.
--- ============================================================
-CREATE TABLE IF NOT EXISTS valores_sugeridos_descartados (
-    campo     VARCHAR(20) NOT NULL COMMENT 'centro | sistema | incidencia | responsable',
-    valor     VARCHAR(60) NOT NULL,
-    creado_en TIMESTAMP  NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT uq_valores_descartados UNIQUE (campo, valor),
-    CONSTRAINT chk_valores_descartados_campo CHECK (
-        campo IN ('centro','sistema','incidencia','responsable')
-    )
-);

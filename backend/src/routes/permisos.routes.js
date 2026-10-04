@@ -1,3 +1,13 @@
+/**
+ * =====================================================================
+ * routes/permisos.routes.js — Catálogo de permisos (/api/permisos)
+ * =====================================================================
+ * Guards por operación:
+ *   listar            -> VER_PERMISOS
+ *   crear/editar/borrar -> CREAR_PERMISOS
+ *   asignar a usuario-rol -> ASIGNAR_PERMISOS
+ * =====================================================================
+ */
 import { Router } from 'express';
 import { requireAuth, requirePermission } from '../middlewares/auth.js';
 import {

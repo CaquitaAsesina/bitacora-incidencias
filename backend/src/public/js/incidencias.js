@@ -1,3 +1,15 @@
+/**
+ * =====================================================================
+ * js/incidencias.js — Bitácora de incidencias (incidencias.html)
+ * =====================================================================
+ * Listado con filtros y paginación, alta, detalle, edición/cierre y borrado,
+ * más el autocompletado de campos con valores ya registrados.
+ *
+ * Los botones de fila llaman funciones globales (window.*) porque se generan
+ * como HTML con onclick.
+ * Para extender: añade el campo/filtro en incidencias.html y su lectura aquí.
+ * =====================================================================
+ */
 let currentPage = 1;
 const modalIncidencia = new bootstrap.Modal(document.getElementById('modalIncidencia'));
 const modalDetalle = new bootstrap.Modal(document.getElementById('modalDetalleIncidencia'));
@@ -46,6 +58,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 // Valores sugeridos por campo, cargados del backend
 let sugerencias = { centro: [], sistema: [], incidencia: [], responsable: [] };
 
+/** Recarga los valores sugeridos desde el backend. */
 async function cargarSugerencias() {
   const res = await apiRequest('/incidencias/valores-sugeridos');
   if (res.ok) sugerencias = res.data;
@@ -101,17 +114,12 @@ function adjuntarSugerencias(inputId, campo) {
         borrar.className = 'sugerencias-borrar';
         borrar.title = `Quitar "${valor}" de las sugerencias`;
         borrar.textContent = '×';
-        borrar.addEventListener('click', async (e) => {
+        borrar.addEventListener('click', (e) => {
           e.stopPropagation();
-          const resp = await apiRequest('/incidencias/valores-sugeridos/descartar', {
-            method: 'POST',
-            body: JSON.stringify({ campo, valor }),
-          });
-          if (!resp.ok) {
-            showToast(resp.mensaje || 'No se pudo quitar la sugerencia', 'error');
-            return;
-          }
-          await cargarSugerencias();
+          // Solo se oculta de las sugerencias actuales (sin persistir en BD).
+          // Si el valor se vuelve a registrar en una incidencia, reaparece al
+          // recargar las sugerencias.
+          sugerencias[campo] = (sugerencias[campo] || []).filter((v) => v !== valor);
           pintar();
         });
 
@@ -129,6 +137,7 @@ function adjuntarSugerencias(inputId, campo) {
   input.addEventListener('blur', () => setTimeout(cerrar, 150));
 }
 
+/** Carga la página actual de incidencias aplicando los filtros del formulario. */
 async function cargarIncidencias() {
   const params = new URLSearchParams();
   params.append('page', currentPage);
@@ -163,6 +172,7 @@ async function cargarIncidencias() {
   }
 }
 
+/** Pinta las filas de la tabla de incidencias. */
 function renderTabla(incidencias) {
   const tbody = document.getElementById('tablaIncidenciasBody');
   tbody.innerHTML = '';
@@ -203,6 +213,7 @@ function renderTabla(incidencias) {
   });
 }
 
+/** Pinta el paginador a partir de { page, totalPages }. */
 function renderPaginacion(pagination) {
   const ul = document.getElementById('paginacion');
   ul.innerHTML = '';
@@ -220,6 +231,7 @@ window.cambiarPagina = (page) => {
   cargarIncidencias();
 };
 
+/** Crea una incidencia con los datos del modal de alta. */
 async function guardarIncidencia() {
   const data = {
     tipo_centro: document.getElementById('tipoCentro').value,
@@ -261,6 +273,7 @@ window.eliminarIncidencia = async (id) => {
   }
 };
 
+/** Limpia los filtros y recarga la primera página. */
 function limpiarFiltros() {
   document.getElementById('filtroDesde').value = '';
   document.getElementById('filtroHasta').value = '';
@@ -406,6 +419,7 @@ document.getElementById('btnGuardarEditarIncidencia').addEventListener('click', 
 
 // ---------- helpers ----------
 
+/** Escapa texto para insertarlo seguro en HTML. */
 function escaparHtml(valor) {
   const div = document.createElement('div');
   div.textContent = valor === null || valor === undefined ? '' : valor;

@@ -1,6 +1,19 @@
+/**
+ * =====================================================================
+ * controllers/incidenciasController.js — Bitácora de incidencias
+ * =====================================================================
+ * Endpoints de listado, detalle, alta, modificación, cierre y borrado, más
+ * los valores sugeridos para los campos de autocompletado.
+ * Delegas la lógica en incidenciasService; aquí solo se leen params/body
+ * y se valida con express-validator.
+ *
+ * Para extender: añade la función aquí y regístrala en routes/incidencias.routes.js.
+ * =====================================================================
+ */
 import { validationResult } from 'express-validator';
 import incidenciasService from '../services/incidenciasService.js';
 
+/** GET /api/incidencias — listado paginado con filtros. */
 export async function listar(req, res, next) {
   try {
     const {
@@ -42,6 +55,7 @@ export async function listar(req, res, next) {
   }
 }
 
+/** GET /api/incidencias/:id — detalle de una incidencia. */
 export async function obtenerPorId(req, res, next) {
   try {
     const { id } = req.params;
@@ -57,6 +71,7 @@ export async function obtenerPorId(req, res, next) {
   }
 }
 
+/** GET /api/incidencias/valores-sugeridos — valores distintos para autocompletar. */
 export async function valoresSugeridos(req, res, next) {
   try {
     const data = await incidenciasService.obtenerValoresSugeridos();
@@ -66,26 +81,7 @@ export async function valoresSugeridos(req, res, next) {
   }
 }
 
-export async function descartarSugerido(req, res, next) {
-  try {
-    const { campo, valor } = req.body;
-    await incidenciasService.descartarValorSugerido(campo, valor);
-    res.json({ ok: true, mensaje: 'Valor quitado de las sugerencias' });
-  } catch (error) {
-    next(error);
-  }
-}
-
-export async function restaurarSugerido(req, res, next) {
-  try {
-    const { campo, valor } = req.body;
-    await incidenciasService.restaurarValorSugerido(campo, valor);
-    res.json({ ok: true, mensaje: 'Valor restaurado en las sugerencias' });
-  } catch (error) {
-    next(error);
-  }
-}
-
+/** POST /api/incidencias — crea una incidencia (usuario_id = sesión). */
 export async function crear(req, res, next) {
   try {
     const errors = validationResult(req);
@@ -103,6 +99,7 @@ export async function crear(req, res, next) {
   }
 }
 
+/** PATCH /api/incidencias/:id — modifica campos y opcionalmente cierra. */
 export async function actualizar(req, res, next) {
   try {
     const errors = validationResult(req);
@@ -121,6 +118,11 @@ export async function actualizar(req, res, next) {
   }
 }
 
+/**
+ * PATCH /api/incidencias/:id/cerrar — cierra una incidencia.
+ * NOTA: endpoint disponible pero no usado por el frontend actual (el módulo
+ * de edición cierra vía PATCH /:id con { cerrar: true }).
+ */
 export async function cerrar(req, res, next) {
   try {
     const { id } = req.params;
@@ -134,6 +136,7 @@ export async function cerrar(req, res, next) {
   }
 }
 
+/** DELETE /api/incidencias/:id — elimina una incidencia. */
 export async function eliminar(req, res, next) {
   try {
     const { id } = req.params;

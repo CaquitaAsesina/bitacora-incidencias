@@ -1,6 +1,20 @@
+/**
+ * =====================================================================
+ * services/usuariosService.js — Lógica de usuarios
+ * =====================================================================
+ * CRUD de usuarios + asignación de roles y de permisos por usuario.
+ * Contraseñas hasheadas con bcrypt (cost 10).
+ *
+ * Las reglas de la Lógica B (permisos personalizados) viven aquí: un usuario
+ * puede tener permisos propios solo a través de UN rol PERSONALIZADO.
+ *
+ * Para extender: concentra aquí cualquier regla sobre usuarios/roles/permisos.
+ * =====================================================================
+ */
 import bcrypt from 'bcrypt';
 import pool from '../config/db.js';
 
+/** @returns {Promise<object[]>} usuarios con su array de roles (evita N+1). */
 export async function listarUsuarios() {
   const [rows] = await pool.query(
     `SELECT id, usuario, nombre, apellido, email, telefono, habilitado, creado_en, actualizado_en
@@ -31,6 +45,7 @@ export async function listarUsuarios() {
   }));
 }
 
+/** @returns {Promise<object|null>} el usuario (sin contraseña) o null. */
 export async function obtenerUsuarioPorId(id) {
   const [rows] = await pool.query(
     `SELECT id, usuario, nombre, apellido, email, telefono, habilitado
@@ -42,6 +57,10 @@ export async function obtenerUsuarioPorId(id) {
   return rows[0];
 }
 
+/**
+ * Crea un usuario con contraseña hasheada.
+ * @throws {Error} 409 si el usuario o el email ya existen.
+ */
 export async function crearUsuario(data) {
   // Validar unicidad
   const [dupUsuario] = await pool.query('SELECT id FROM usuarios WHERE usuario = ?', [data.usuario]);
@@ -77,6 +96,10 @@ export async function crearUsuario(data) {
   return await obtenerUsuarioPorId(result.insertId);
 }
 
+/**
+ * Actualiza los campos enviados (incluida contraseña opcional).
+ * @throws {Error} 404 inexistente, 409 usuario/email duplicado.
+ */
 export async function actualizarUsuario(id, data) {
   const usuario = await obtenerUsuarioPorId(id);
   if (!usuario) {
@@ -138,6 +161,10 @@ export async function actualizarUsuario(id, data) {
   return await obtenerUsuarioPorId(id);
 }
 
+/**
+ * Elimina un usuario.
+ * @throws {Error} 404 si no existe.
+ */
 export async function eliminarUsuario(id) {
   const usuario = await obtenerUsuarioPorId(id);
   if (!usuario) {
@@ -150,6 +177,7 @@ export async function eliminarUsuario(id) {
   return true;
 }
 
+/** @returns {Promise<object[]>} roles asignados a un usuario. */
 export async function listarRolesDeUsuario(usuarioId) {
   const [rows] = await pool.query(
     `SELECT r.id, r.nombre, r.tipo
@@ -162,6 +190,10 @@ export async function listarRolesDeUsuario(usuarioId) {
   return rows;
 }
 
+/**
+ * Asigna un rol a un usuario (idempotente con INSERT IGNORE).
+ * @throws {Error} 404 si usuario o rol no existen.
+ */
 export async function asignarRol(usuarioId, rolId) {
   const [user] = await pool.query('SELECT id FROM usuarios WHERE id = ?', [usuarioId]);
   if (user.length === 0) {
@@ -182,6 +214,10 @@ export async function asignarRol(usuarioId, rolId) {
   return true;
 }
 
+/**
+ * Quita un rol a un usuario (los permisos personalizados caen en cascada).
+ * @throws {Error} 404 si no existen o no estaba asignado.
+ */
 export async function quitarRol(usuarioId, rolId) {
   const [user] = await pool.query('SELECT id FROM usuarios WHERE id = ?', [usuarioId]);
   if (user.length === 0) {
@@ -213,6 +249,10 @@ export async function quitarRol(usuarioId, rolId) {
   return true;
 }
 
+/**
+ * Reemplaza los permisos personalizados (Lógica B) de un par (usuario, rol).
+ * @throws {Error} 400 si el par no existe o el rol no es PERSONALIZADO.
+ */
 export async function asignarPermisosPersonalizados(usuarioId, rolId, permisos) {
   const [rel] = await pool.query('SELECT 1 FROM usuarios_roles WHERE usuario_id = ? AND rol_id = ?', [usuarioId, rolId]);
   if (rel.length === 0) {
@@ -251,6 +291,7 @@ export async function asignarPermisosPersonalizados(usuarioId, rolId, permisos) 
   return true;
 }
 
+/** @returns {Promise<object[]>} permisos concedidos de un par (usuario, rol). */
 export async function listarPermisosDeUsuarioRol(usuarioId, rolId) {
   const [rel] = await pool.query('SELECT 1 FROM usuarios_roles WHERE usuario_id = ? AND rol_id = ?', [usuarioId, rolId]);
   if (rel.length === 0) {
@@ -270,6 +311,10 @@ export async function listarPermisosDeUsuarioRol(usuarioId, rolId) {
   return rows;
 }
 
+/**
+ * Quita un permiso concedido de un par (usuario, rol).
+ * @throws {Error} 404 si el par no existe o el permiso no estaba asignado.
+ */
 export async function quitarPermisoDeUsuarioRol(usuarioId, rolId, permisoId) {
   const [rel] = await pool.query('SELECT 1 FROM usuarios_roles WHERE usuario_id = ? AND rol_id = ?', [usuarioId, rolId]);
   if (rel.length === 0) {
@@ -335,19 +380,25 @@ export async function obtenerRolPersonalizadoConPermisos(usuarioId) {
     error.statusCode = 400;
     throw error;
   }
-
   const rol = personalizados[0];
   const permisos = await listarPermisosDeUsuarioRol(usuarioId, rol.id);
 
   return { rol, permisos };
 }
 
+/**
+ * Resuelve el rol PERSONALIZADO del usuario y reemplaza sus permisos.
+ * @returns {Promise<object>} el rol PERSONALIZADO usado.
+ */
 export async function asignarPermisosPersonalizadosPorUsuario(usuarioId, permisos) {
   const { rol } = await obtenerRolPersonalizadoConPermisos(usuarioId);
   await asignarPermisosPersonalizados(usuarioId, rol.id, permisos);
   return rol;
 }
 
+/**
+ * Resuelve el rol PERSONALIZADO del usuario y quita uno de sus permisos.
+ */
 export async function quitarPermisoPersonalizadoPorUsuario(usuarioId, permisoId) {
   const { rol } = await obtenerRolPersonalizadoConPermisos(usuarioId);
   return quitarPermisoDeUsuarioRol(usuarioId, rol.id, permisoId);

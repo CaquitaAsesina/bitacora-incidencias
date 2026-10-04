@@ -1,3 +1,14 @@
+/**
+ * =====================================================================
+ * services/incidenciasService.js — Lógica de la bitácora
+ * =====================================================================
+ * Listado/filtros, detalle, alta, modificación/cierre y borrado de incidencias,
+ * además del cálculo de los valores sugeridos para autocompletado.
+ *
+ * Para extender: cualquier regla sobre incidencias (estados, campos nuevos,
+ * cálculos de tiempos, etc.) debe vivir en este archivo.
+ * =====================================================================
+ */
 import pool from '../config/db.js';
 
 /**
@@ -11,6 +22,14 @@ import pool from '../config/db.js';
  * - Si sesion.id !== usuario_id -> usuario_id = sesion.id (sobreescribe: quien cierra pasa a ser responsable)
  * - Si sesion.id === usuario_id -> usuario_id queda igual.
  * - responsable (VARCHAR) NUNCA se modifica en el cierre.
+ */
+/**
+ * Lista incidencias con filtros y paginación.
+ * @param {object} filtros fecha_desde, fecha_hasta, centro, tipo_centro, sistema,
+ *                         incidencia, usuario_id, responsable_texto, estado, q
+ * @param {number|string} page
+ * @param {number|string} limit
+ * @returns {Promise<{ data: object[], pagination: object }>}
  */
 export async function listarIncidencias(filtros = {}, page = 1, limit = 10) {
   let query = `
@@ -143,6 +162,10 @@ export async function listarIncidencias(filtros = {}, page = 1, limit = 10) {
   };
 }
 
+/**
+ * @param {number|string} id
+ * @returns {Promise<object|null>} la incidencia (con nombre del responsable) o null.
+ */
 export async function obtenerIncidenciaPorId(id) {
   const [rows] = await pool.query(
     `SELECT 
@@ -159,6 +182,10 @@ export async function obtenerIncidenciaPorId(id) {
   return rows[0];
 }
 
+/**
+ * Crea una incidencia. usuario_id siempre sale de la sesión, nunca del body.
+ * @throws {Error} 409 si el ticket ya existe.
+ */
 export async function crearIncidencia(data, usuarioIdSesion) {
   // Validar ticket único
   const [ticketRows] = await pool.query(
@@ -193,6 +220,11 @@ export async function crearIncidencia(data, usuarioIdSesion) {
   return await obtenerIncidenciaPorId(result.insertId);
 }
 
+/**
+ * Cierra una incidencia: hora_fin = ahora, tiempo_solucion = hora_fin - hora_inicio
+ * y, si cierra otro usuario, usuario_id pasa a ser quien cierra.
+ * @throws {Error} 404 inexistente, 409 ya cerrada.
+ */
 export async function cerrarIncidencia(id, usuarioIdSesion) {
   // Obtener incidencia
   const [rows] = await pool.query(
@@ -333,6 +365,10 @@ export async function actualizarIncidencia(id, data, usuarioIdSesion) {
   return await obtenerIncidenciaPorId(id);
 }
 
+/**
+ * Elimina una incidencia.
+ * @throws {Error} 404 si no existe.
+ */
 export async function eliminarIncidencia(id) {
   const [rows] = await pool.query('SELECT id FROM incidencias WHERE id = ?', [id]);
 
@@ -362,19 +398,11 @@ export async function obtenerValoresSugeridos() {
      ORDER BY centro, sistema, incidencia, responsable`
   );
 
-  const [descartados] = await pool.query(
-    'SELECT campo, valor FROM valores_sugeridos_descartados'
-  );
-
-  // Índice para descartar rápido la comprobación dentro del bucle
-  const conjuntoDescartados = new Set(descartados.map((d) => `${d.campo}::${d.valor}`));
-
   const sugeridos = { centro: [], sistema: [], incidencia: [], responsable: [] };
   for (const fila of rows) {
     for (const campo of Object.keys(sugeridos)) {
       const valor = (fila[campo] || '').trim();
       if (!valor) continue;
-      if (conjuntoDescartados.has(`${campo}::${valor}`)) continue;
       if (!sugeridos[campo].includes(valor)) {
         sugeridos[campo].push(valor);
       }
@@ -384,58 +412,10 @@ export async function obtenerValoresSugeridos() {
   return sugeridos;
 }
 
-/**
- * Marca un valor como descartado para que deje de aparecer en las sugerencias.
- * No modifica ni elimina la incidencia que lo usó: solo oculta la sugerencia.
- */
-export async function descartarValorSugerido(campo, valor) {
-  const camposValidos = ['centro', 'sistema', 'incidencia', 'responsable'];
-  if (!camposValidos.includes(campo)) {
-    const error = new Error('Campo no válido para sugerencias');
-    error.statusCode = 400;
-    throw error;
-  }
-
-  const texto = String(valor || '').trim();
-  if (!texto) {
-    const error = new Error('El valor a descartar está vacío');
-    error.statusCode = 400;
-    throw error;
-  }
-
-  await pool.query(
-    'INSERT IGNORE INTO valores_sugeridos_descartados (campo, valor) VALUES (?, ?)',
-    [campo, texto]
-  );
-
-  return true;
-}
-
-/**
- * Quita el descarte de un valor para que vuelva a sugerirse.
- */
-export async function restaurarValorSugerido(campo, valor) {
-  const camposValidos = ['centro', 'sistema', 'incidencia', 'responsable'];
-  if (!camposValidos.includes(campo)) {
-    const error = new Error('Campo no válido para sugerencias');
-    error.statusCode = 400;
-    throw error;
-  }
-
-  await pool.query(
-    'DELETE FROM valores_sugeridos_descartados WHERE campo = ? AND valor = ?',
-    [campo, String(valor || '').trim()]
-  );
-
-  return true;
-}
-
 export default {
   listarIncidencias,
   obtenerIncidenciaPorId,
   obtenerValoresSugeridos,
-  descartarValorSugerido,
-  restaurarValorSugerido,
   crearIncidencia,
   actualizarIncidencia,
   cerrarIncidencia,

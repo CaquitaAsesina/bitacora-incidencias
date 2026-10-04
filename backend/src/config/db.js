@@ -1,3 +1,17 @@
+/**
+ * =====================================================================
+ * config/db.js — Conexión a MySQL (pool de conexiones)
+ * =====================================================================
+ * Crea un pool reutilizable con mysql2/promise a partir de las variables de
+ * entorno. Todas las capas (controllers -> services) comparten este mismo pool.
+ *
+ * Variables de entorno (.env):
+ *   DB_HOST, DB_PORT, DB_USER (o DB_USERNAME), DB_PASSWORD, DB_NAME.
+ *
+ * Para extender: si necesitas otra base de datos o ajustar el pool, hazlo aquí;
+ * el resto del código importa el pool desde este archivo.
+ * =====================================================================
+ */
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
 

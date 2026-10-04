@@ -1,5 +1,16 @@
+/**
+ * =====================================================================
+ * controllers/rolesController.js — Roles del sistema
+ * =====================================================================
+ * CRUD de roles + permisos del rol + usuarios que lo tienen.
+ * Delega toda la lógica en rolesService.
+ *
+ * Para extender: añade la función aquí y regístrala en routes/roles.routes.js.
+ * =====================================================================
+ */
 import rolesService from '../services/rolesService.js';
 
+/** GET /api/roles — lista todos los roles. */
 export async function listar(req, res, next) {
   try {
     const roles = await rolesService.listarRoles();
@@ -9,6 +20,7 @@ export async function listar(req, res, next) {
   }
 }
 
+/** POST /api/roles — crea un rol. */
 export async function crear(req, res, next) {
   try {
     const rol = await rolesService.crearRol(req.body);
@@ -18,6 +30,7 @@ export async function crear(req, res, next) {
   }
 }
 
+/** PATCH /api/roles/:id — renombra/cambia tipo de un rol. */
 export async function actualizar(req, res, next) {
   try {
     const { id } = req.params;
@@ -28,6 +41,7 @@ export async function actualizar(req, res, next) {
   }
 }
 
+/** DELETE /api/roles/:id — elimina un rol. */
 export async function eliminar(req, res, next) {
   try {
     const { id } = req.params;
@@ -38,6 +52,7 @@ export async function eliminar(req, res, next) {
   }
 }
 
+/** GET /api/roles/:id/usuarios — usuarios que tienen el rol. */
 export async function listarUsuariosDeRol(req, res, next) {
   try {
     const { id } = req.params;
@@ -48,6 +63,7 @@ export async function listarUsuariosDeRol(req, res, next) {
   }
 }
 
+/** GET /api/roles/:id/permisos — permisos asignados al rol. */
 export async function listarPermisos(req, res, next) {
   try {
     const { id } = req.params;
@@ -58,6 +74,7 @@ export async function listarPermisos(req, res, next) {
   }
 }
 
+/** DELETE /api/roles/:id/permisos/:pid — quita un permiso del rol. */
 export async function quitarPermiso(req, res, next) {
   try {
     const { id, pid } = req.params;
@@ -68,6 +85,7 @@ export async function quitarPermiso(req, res, next) {
   }
 }
 
+/** POST /api/roles/:id/permisos — reemplaza los permisos del rol. */
 export async function asignarPermisos(req, res, next) {
   try {
     const { id } = req.params;

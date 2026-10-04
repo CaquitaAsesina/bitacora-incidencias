@@ -1,3 +1,16 @@
+/**
+ * =====================================================================
+ * routes/usuarios.routes.js — Usuarios (/api/usuarios)
+ * =====================================================================
+ * Guards por operación:
+ *   listar / roles del usuario -> VER_USUARIOS (+ ASIGNAR_ROLES/ASIGNAR_PERMISOS)
+ *   crear/editar/borrar        -> CREAR_USUARIO
+ *   asignar/quitar rol         -> ASIGNAR_ROLES
+ *   permisos personalizados    -> ASIGNAR_PERMISOS
+ *
+ * Validación de alta con express-validator (usuarioValidation).
+ * =====================================================================
+ */
 import { Router } from 'express';
 import { body } from 'express-validator';
 import { requireAuth, requirePermission } from '../middlewares/auth.js';

@@ -1,6 +1,11 @@
 import pool from '../config/db.js';
 
 /**
+ * =====================================================================
+ * services/permisosService.js — Corazón del sistema de permisos
+ * =====================================================================
+ * CRUD del catálogo de permisos y asignación de permisos usuario-rol.
+ *
  * Servicio de permisos - Corazón del sistema
  * 
  * LÓGICA A (roles.tipo = 'SISTEMA'): 
@@ -53,11 +58,16 @@ export async function obtenerPermisosEfectivos(usuarioId) {
   return Array.from(permisosSet);
 }
 
+/** @returns {Promise<object[]>} catálogo completo de permisos, ordenado por id. */
 export async function listarPermisos() {
   const [rows] = await pool.query('SELECT * FROM permisos ORDER BY id');
   return rows;
 }
 
+/**
+ * Crea un permiso nuevo.
+ * @throws {Error} 400 si falta el nombre, 409 si ya existe.
+ */
 export async function crearPermiso(nombre) {
   if (!nombre) {
     const error = new Error('Nombre de permiso requerido');
@@ -77,6 +87,14 @@ export async function crearPermiso(nombre) {
   return rows[0];
 }
 
+/**
+ * Reemplaza los permisos personalizados de un par (usuario, rol).
+ * Solo aplica a roles PERSONALIZADO (Lógica B).
+ * @param {number|string} usuarioId
+ * @param {number|string} rolId
+ * @param {{ permiso_id: number, concedido?: boolean }[]} permisos
+ * @throws {Error} 400/404 según validaciones.
+ */
 export async function asignarPermisosAUsuarioRol(usuarioId, rolId, permisos) {
   const [rel] = await pool.query('SELECT 1 FROM usuarios_roles WHERE usuario_id = ? AND rol_id = ?', [usuarioId, rolId]);
   if (rel.length === 0) {
@@ -114,6 +132,10 @@ export async function asignarPermisosAUsuarioRol(usuarioId, rolId, permisos) {
   return true;
 }
 
+/**
+ * Renombra un permiso existente.
+ * @throws {Error} 400 sin nombre, 404 inexistente, 409 duplicado.
+ */
 export async function actualizarPermiso(id, nombre) {
   if (!nombre) {
     const error = new Error('Nombre de permiso requerido');
@@ -140,6 +162,10 @@ export async function actualizarPermiso(id, nombre) {
   return updated[0];
 }
 
+/**
+ * Elimina un permiso (las asignaciones caen por ON DELETE CASCADE).
+ * @throws {Error} 404 si no existe.
+ */
 export async function eliminarPermiso(id) {
   const [rows] = await pool.query('SELECT id FROM permisos WHERE id = ?', [id]);
   if (rows.length === 0) {

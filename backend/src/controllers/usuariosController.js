@@ -1,5 +1,16 @@
+/**
+ * =====================================================================
+ * controllers/usuariosController.js — Usuarios, roles y permisos por usuario
+ * =====================================================================
+ * CRUD de usuarios y asignación de roles/permisos a cada usuario.
+ * Delega toda la lógica en usuariosService.
+ *
+ * Para extender: añade la función aquí y regístrala en routes/usuarios.routes.js.
+ * =====================================================================
+ */
 import usuariosService from '../services/usuariosService.js';
 
+/** GET /api/usuarios — lista usuarios (incluye sus roles). */
 export async function listar(req, res, next) {
   try {
     const usuarios = await usuariosService.listarUsuarios();
@@ -9,6 +20,7 @@ export async function listar(req, res, next) {
   }
 }
 
+/** POST /api/usuarios — crea un usuario. */
 export async function crear(req, res, next) {
   try {
     const usuario = await usuariosService.crearUsuario(req.body);
@@ -18,6 +30,7 @@ export async function crear(req, res, next) {
   }
 }
 
+/** PATCH /api/usuarios/:id — actualiza un usuario. */
 export async function actualizar(req, res, next) {
   try {
     const { id } = req.params;
@@ -28,6 +41,7 @@ export async function actualizar(req, res, next) {
   }
 }
 
+/** DELETE /api/usuarios/:id — elimina un usuario. */
 export async function eliminar(req, res, next) {
   try {
     const { id } = req.params;
@@ -38,6 +52,7 @@ export async function eliminar(req, res, next) {
   }
 }
 
+/** GET /api/usuarios/:id/roles — roles del usuario. */
 export async function listarRoles(req, res, next) {
   try {
     const { id } = req.params;
@@ -48,6 +63,7 @@ export async function listarRoles(req, res, next) {
   }
 }
 
+/** POST /api/usuarios/:id/roles — asigna un rol al usuario. */
 export async function asignarRol(req, res, next) {
   try {
     const { id } = req.params;
@@ -59,6 +75,7 @@ export async function asignarRol(req, res, next) {
   }
 }
 
+/** DELETE /api/usuarios/:id/roles/:rid — quita un rol al usuario. */
 export async function quitarRol(req, res, next) {
   try {
     const { id, rid } = req.params;
@@ -69,6 +86,7 @@ export async function quitarRol(req, res, next) {
   }
 }
 
+/** GET /api/usuarios/:uid/roles/:rid/permisos — permisos personalizados del par. */
 export async function listarPermisosDeUsuarioRol(req, res, next) {
   try {
     const { uid, rid } = req.params;
@@ -79,6 +97,7 @@ export async function listarPermisosDeUsuarioRol(req, res, next) {
   }
 }
 
+/** DELETE /api/usuarios/:uid/roles/:rid/permisos/:pid — quita un permiso del par. */
 export async function quitarPermisoDeUsuarioRol(req, res, next) {
   try {
     const { uid, rid, pid } = req.params;
@@ -89,6 +108,7 @@ export async function quitarPermisoDeUsuarioRol(req, res, next) {
   }
 }
 
+/** GET /api/usuarios/:id/permisos-personalizados — resuelve el rol PERSONALIZADO y sus permisos. */
 export async function verRolPersonalizado(req, res, next) {
   try {
     const { id } = req.params;
@@ -99,6 +119,7 @@ export async function verRolPersonalizado(req, res, next) {
   }
 }
 
+/** POST /api/usuarios/:id/permisos-personalizados — asigna permisos al rol PERSONALIZADO del usuario. */
 export async function asignarPermisosPorUsuario(req, res, next) {
   try {
     const { id } = req.params;
@@ -114,6 +135,7 @@ export async function asignarPermisosPorUsuario(req, res, next) {
   }
 }
 
+/** DELETE /api/usuarios/:id/permisos-personalizados/:pid — quita un permiso al usuario. */
 export async function quitarPermisoPorUsuario(req, res, next) {
   try {
     const { id, pid } = req.params;
@@ -124,6 +146,7 @@ export async function quitarPermisoPorUsuario(req, res, next) {
   }
 }
 
+/** POST /api/usuarios/:uid/roles/:rid/permisos — permisos personalizados del par (Lógica B). */
 export async function asignarPermisosPersonalizados(req, res, next) {
   try {
     const { uid, rid } = req.params;
