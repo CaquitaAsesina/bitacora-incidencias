@@ -103,7 +103,7 @@ async function cargarGraficos() {
           {
             label: 'Incidencias',
             data: resPorSistema.data.map(d => d.total),
-            backgroundColor: '#DC2626',
+            backgroundColor: '#E63946',
           },
         ],
       },
@@ -125,7 +125,7 @@ async function cargarGraficos() {
         datasets: [
           {
             data: resPorTipoCentro.data.map(d => d.total),
-            backgroundColor: ['#DC2626', '#3B82F6'],
+            backgroundColor: ['#E63946', '#2A9D8F'],
           },
         ],
       },
@@ -152,12 +152,12 @@ async function cargarGraficos() {
           {
             label: 'Abiertas',
             data: resPorCentro.data.map(d => d.abiertas),
-            backgroundColor: '#F59E0B',
+            backgroundColor: '#FFB703',
           },
           {
             label: 'Cerradas',
             data: resPorCentro.data.map(d => d.cerradas),
-            backgroundColor: '#10B981',
+            backgroundColor: '#06A77D',
           },
         ],
       },
@@ -187,7 +187,7 @@ async function cargarGraficos() {
           {
             label: 'Incidencias',
             data: resPorTipoIncidencia.data.slice(0, 10).map(d => d.total),
-            backgroundColor: '#3B82F6',
+            backgroundColor: '#2A9D8F',
           },
         ],
       },
@@ -257,10 +257,10 @@ async function cargarGraficoTiempoSolucion() {
         {
           label: 'Tiempo de solución (min)',
           data: series.map(s => Number(s.minutos)),
-          borderColor: '#DC2626',
-          backgroundColor: 'rgba(220,38,38,0.08)',
+          borderColor: '#E63946',
+          backgroundColor: 'rgba(230,57,70,0.08)',
           pointBackgroundColor: series.map(s =>
-            s.id === puntoMasLento.id ? '#DC2626' : '#3B82F6'
+            s.id === puntoMasLento.id ? '#E63946' : '#2A9D8F'
           ),
           pointRadius: series.map(s => (s.id === puntoMasLento.id ? 9 : 5)),
           pointHoverRadius: 9,

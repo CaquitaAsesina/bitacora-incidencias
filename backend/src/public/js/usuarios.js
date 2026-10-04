@@ -193,7 +193,9 @@ async function guardarUsuario() {
 }
 
 window.eliminarUsuario = async function(id) {
-  if (!confirm('¿Eliminar este usuario?')) return;
+  // uiConfirmar() (js/ui.js) es el equivalente visual del confirm() nativo:
+  // mismo flujo, misma decisión, pero con modal Bootstrap.
+  if (!(await uiConfirmar('¿Eliminar este usuario?'))) return;
   const res = await apiRequest(`/usuarios/${id}`, { method: 'DELETE' });
   if (res.ok) {
     showToast('Usuario eliminado', 'success');

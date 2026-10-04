@@ -1,74 +1,77 @@
 <!DOCTYPE html>
 <!--
   incidencias.html — Bitácora de incidencias (listado, alta, detalle, edición).
-  Scripts (en orden): api.js -> layout.js -> incidencias.js.
-  Incluye <style> local para el desplegable de sugerencias.
+  Scripts (en orden): api.js -> ui.js -> layout.js -> incidencias.js.
+  Los estilos del desplegable de sugerencias se movieron a css/theme.css (§24).
+  Los ids funcionales (filtros, tablaIncidenciasBody, paginacion, modalIncidencia,
+  modalDetalleIncidencia, modalEditarIncidencia, botones de acción, userInfo,
+  logoutBtn, sidebarNav, toastContainer) se conservan sin cambios.
 -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Incidencias - Bitácora de Incidencias</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <meta name="description" content="Registro y seguimiento de incidencias.">
+    <title>Incidencias · Bitácora de Incidencias</title>
+
+    <!-- Iconos y logo -->
+    <link rel="icon" type="image/png" href="img/favicon.png">
+    <link rel="apple-touch-icon" href="img/logo-isotipo.png">
+
+    <!-- Tipografía -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Bootstrap 5.3 + iconos + tema de la app (orden obligatorio) -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="css/styles.css">
-    <style>
-        .sugerencias-wrap { position: relative; }
-
-        .sugerencias-lista {
-            position: absolute;
-            z-index: 1080;
-            top: 100%;
-            left: 0;
-            right: 0;
-            max-height: 220px;
-            overflow-y: auto;
-            background: #fff;
-            border: 1px solid #ced4da;
-            border-radius: .375rem;
-            box-shadow: 0 .5rem 1rem rgba(0, 0, 0, .15);
-            margin-top: 2px;
-            display: none;
-        }
-
-        .sugerencias-lista.mostrar { display: block; }
-
-        .sugerencias-item {
-            display: flex;
-            align-items: center;
-            gap: .5rem;
-            padding: .4rem .6rem;
-            cursor: pointer;
-        }
-
-        .sugerencias-item:hover { background-color: #f8f9fa; }
-
-        .sugerencias-texto { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-        .sugerencias-borrar {
-            border: 0;
-            background: transparent;
-            color: #dc3545;
-            font-weight: 700;
-            line-height: 1;
-            padding: 0 .25rem;
-            cursor: pointer;
-            flex-shrink: 0;
-        }
-
-        .sugerencias-borrar:hover { color: #b02a37; }
-
-        .sugerencias-vacio { padding: .4rem .6rem; color: #6c757d; font-size: .875rem; }
-    </style>
+    <link rel="stylesheet" href="css/theme.css">
 </head>
-<body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-danger sticky-top">
+<body class="ui-pagina-app">
+
+    <!-- ================= Overlay de arranque (boot) ================= -->
+    <div class="ui-overlay ui-overlay--boot ui-overlay--visible" id="uiBootOverlay"
+         role="status" aria-live="polite" aria-hidden="false">
+        <div class="ui-overlay__panel">
+            <img src="img/logo-farmacias-peruanas.png" alt="Farmacias Peruanas" class="ui-overlay__logo">
+            <p class="ui-overlay__titulo">Cargando sistema…</p>
+            <div class="ui-overlay__barra" role="presentation"></div>
+        </div>
+    </div>
+
+    <!-- ================= Overlay de cierre de sesión (rojo) ================= -->
+    <div class="ui-overlay ui-overlay--logout ui-overlay--oculto" id="uiLogoutOverlay"
+         role="status" aria-live="polite" aria-hidden="true">
+        <div class="ui-overlay__panel">
+            <img src="img/logo-farmacias-peruanas.png" alt="Farmacias Peruanas" class="ui-overlay__logo">
+            <span class="ui-overlay__spinner" aria-hidden="true"></span>
+            <p class="ui-overlay__titulo">Cerrando sesión…</p>
+            <p class="ui-overlay__texto">Saliendo de forma segura</p>
+        </div>
+    </div>
+
+    <!-- ================= Navbar ================= -->
+    <nav class="navbar navbar-expand-lg sticky-top">
         <div class="container-fluid">
-            <span class="navbar-brand mb-0 h1"><i class="bi bi-journal-text"></i> Bitácora de Incidencias</span>
+            <button class="navbar-toggler d-md-none me-2" id="uiSidebarToggle" type="button"
+                    data-bs-toggle="offcanvas" data-bs-target="#uiSidebarOffcanvas"
+                    aria-controls="uiSidebarOffcanvas" aria-label="Abrir menú">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <span class="navbar-brand mb-0 h1">
+                <img src="img/logo-farmacias-peruanas.png" alt="Farmacias Peruanas" class="ui-logo-navbar">
+                <span class="ui-marca-texto">
+                    <span class="ui-marca-texto__principal">Bitácora de Incidencias</span>
+                    <span class="ui-marca-texto__secundario">Sistema interno</span>
+                </span>
+            </span>
+
             <div class="navbar-nav ms-auto">
                 <div class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle text-white" href="#" role="button" data-bs-toggle="dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
                         <i class="bi bi-person-circle"></i> <span id="userInfo">Usuario</span>
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end">
@@ -81,27 +84,25 @@
 
     <div class="container-fluid">
         <div class="row">
-            <nav class="col-md-3 col-lg-2 d-md-block sidebar p-0">
+            <nav class="col-md-3 col-lg-2 d-none d-md-block sidebar p-0">
                 <div class="position-sticky">
                     <ul class="nav flex-column pt-3" id="sidebarNav"></ul>
                 </div>
             </nav>
 
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 py-4">
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h2>Incidencias</h2>
+                <div class="ui-cabecera d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+                    <h2 class="ui-titulo-pagina">Incidencias</h2>
                     <button class="btn btn-danger" id="btnNuevaIncidencia" style="display: none;">
                         <i class="bi bi-plus-circle"></i> Nueva Incidencia
                     </button>
                 </div>
 
-                
                 <div class="card mb-4">
                     <div class="card-header bg-light">
                         <i class="bi bi-funnel"></i> <strong>Filtros</strong>
                     </div>
                     <div class="card-body">
-                        
                         <div class="row g-3">
                             <div class="col-md-2">
                                 <label class="form-label form-label-sm">Desde</label>
@@ -187,16 +188,26 @@
                         </nav>
                     </div>
                 </div>
+
+                <footer class="ui-footer mt-4">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <span class="ui-footer__marca">
+                            <img src="img/logo-isotipo.png" alt="" class="ui-logo-footer">
+                            Farmacias Peruanas
+                        </span>
+                        <span>Área de Tecnología · Bitácora de Incidencias</span>
+                    </div>
+                </footer>
             </main>
         </div>
     </div>
 
     <!-- Modal Nueva Incidencia -->
     <div class="modal fade" id="modalIncidencia" tabindex="-1">
-        <div class="modal-dialog modal-lg">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header bg-danger text-white">
-                    <h5 class="modal-title">Nueva Incidencia</h5>
+                    <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>Nueva Incidencia</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
@@ -247,10 +258,10 @@
 
     <!-- Modal Ver Detalle -->
     <div class="modal fade" id="modalDetalleIncidencia" tabindex="-1">
-        <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header bg-danger text-white">
-                    <h5 class="modal-title">Detalle de Incidencia</h5>
+                    <h5 class="modal-title"><i class="bi bi-info-circle me-2"></i>Detalle de Incidencia</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
@@ -285,10 +296,10 @@
 
     <!-- Modal Modificar Incidencia -->
     <div class="modal fade" id="modalEditarIncidencia" tabindex="-1">
-        <div class="modal-dialog modal-lg">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header bg-warning text-dark">
-                    <h5 class="modal-title">Modificar Incidencia</h5>
+                    <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Modificar Incidencia</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
@@ -348,11 +359,43 @@
         </div>
     </div>
 
+    <!-- ================= Menú lateral móvil (offcanvas) ================= -->
+    <div class="offcanvas offcanvas-start" tabindex="-1" id="uiSidebarOffcanvas" aria-label="Menú de navegación">
+        <div class="offcanvas-header">
+            <img src="img/logo-farmacias-peruanas.png" alt="Farmacias Peruanas" class="ui-logo-navbar">
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
+        </div>
+        <div class="offcanvas-body p-0">
+            <ul class="nav flex-column pt-2" id="uiSidebarNav"></ul>
+        </div>
+    </div>
+
+    <!-- ================= Modal de confirmación reutilizable ================= -->
+    <div class="modal fade" id="uiModalConfirmacion" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered ui-modal-confirmacion">
+            <div class="modal-content">
+                <div class="modal-header border-0 pb-0">
+                    <span class="ui-icono-confirmacion"><i class="bi bi-exclamation-triangle-fill"></i></span>
+                </div>
+                <div class="modal-body text-center pt-2">
+                    <h5 class="modal-title mb-2">Confirmar acción</h5>
+                    <p id="uiConfirmacionMensaje" class="text-muted mb-0">¿Está seguro?</p>
+                </div>
+                <div class="modal-footer border-0 justify-content-center pt-0">
+                    <button type="button" class="btn btn-secondary" id="uiConfirmacionCancelar">Cancelar</button>
+                    <button type="button" class="btn btn-danger" id="uiConfirmacionAceptar">Sí, continuar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="toastContainer" class="toast-container"></div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="js/api.js"></script>
-    <script src="js/layout.js"></script>
-    <script src="js/incidencias.js"></script>
+    <!-- Bootstrap Bundle (Popper incluido) + scripts de la app, en orden -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" defer></script>
+    <script src="js/api.js" defer></script>
+    <script src="js/ui.js" defer></script>
+    <script src="js/layout.js" defer></script>
+    <script src="js/incidencias.js" defer></script>
 </body>
 </html>

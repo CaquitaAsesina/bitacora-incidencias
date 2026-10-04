@@ -259,7 +259,8 @@ async function guardarIncidencia() {
 }
 
 window.eliminarIncidencia = async (id) => {
-  if (!confirm('¿Eliminar esta incidencia?')) return;
+  // uiConfirmar() (js/ui.js) es el equivalente visual del confirm() nativo.
+  if (!(await uiConfirmar('¿Eliminar esta incidencia?'))) return;
   
   const res = await apiRequest(`/incidencias/${id}`, {
     method: 'DELETE',

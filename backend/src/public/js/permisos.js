@@ -121,7 +121,11 @@ window.editarPermiso = function (id) {
 window.eliminarPermiso = async function (id) {
   const permiso = permisosData.find((p) => p.id === id);
   const nombre = permiso ? permiso.nombre : id;
-  if (!confirm(`¿Eliminar el permiso "${nombre}"?\nSe quitará de todos los roles y usuarios que lo tengan asignado.`)) return;
+  // uiConfirmar() (js/ui.js) es el equivalente visual del confirm() nativo.
+  const confirmado = await uiConfirmar(
+    `¿Eliminar el permiso "${nombre}"? Se quitará de todos los roles y usuarios que lo tengan asignado.`
+  );
+  if (!confirmado) return;
 
   const res = await apiRequest(`/permisos/${id}`, { method: 'DELETE' });
   if (res.ok) {

@@ -190,7 +190,8 @@ async function guardarRol() {
 }
 
 window.eliminarRol = async function(id) {
-  if (!confirm('¿Eliminar este rol?')) return;
+  // uiConfirmar() (js/ui.js) es el equivalente visual del confirm() nativo.
+  if (!(await uiConfirmar('¿Eliminar este rol?'))) return;
   const res = await apiRequest(`/roles/${id}`, { method: 'DELETE' });
   if (res.ok) {
     showToast('Rol eliminado', 'success');
