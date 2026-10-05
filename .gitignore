@@ -1,0 +1,10 @@
+# Dependencias (se instalan con npm install)
+node_modules/
+
+# Variables de entorno: nunca versionar credenciales reales
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log

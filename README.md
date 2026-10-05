@@ -5,27 +5,45 @@ Aplicación web full-stack para gestionar una bitácora de incidencias con auten
 ## Estructura del Proyecto
 
 ```
-backend/
-  server.js                 # entrada: Express, sesión, estáticos y /api
-  schema.sql                # esquema + datos iniciales (roles, permisos, admin)
+backend/                      # API (Node.js + Express)
+  package.json                # dependencias y scripts (start / dev)
+  .env                        # variables de entorno locales (NO se versiona)
+  .env.example                # plantilla de variables de entorno
+  schema.sql                  # esquema + datos iniciales (roles, permisos, admin)
+  render.yml                  # Blueprint de despliegue en Render
   src/
-    config/db.js            # pool de conexiones MySQL
-    middlewares/            # auth (requireAuth/requirePermission) y errorHandler
-    routes/                 # endpoints y guards por módulo
-    controllers/            # reciben req/res y delegan en services
-    services/               # lógica de negocio y acceso a datos
-    public/                 # frontend sin build
-      *.html                # una página por módulo (login, dashboard, ...)
-      js/                   # api.js + layout.js compartidos y un script por página
-      css/styles.css        # estilos globales
+    server.js                 # entrada: Express, sesión, estáticos y /api
+    config/db.js              # pool de conexiones MySQL
+    middlewares/              # auth (requireAuth/requirePermission) y errorHandler
+    routes/                   # endpoints y guards por módulo
+    controllers/              # reciben req/res y delegan en services
+    services/                 # lógica de negocio y acceso a datos
+
+frontend/                     # UI sin build (servida como estáticos por Express)
+  index.html                  # login
+  dashboard.html              # dashboard analítico
+  usuarios.html               # una página por módulo
+  roles.html
+  permisos.html
+  incidencias.html
+  css/
+    styles.css                # estilos globales
+    theme.css                 # tema visual (paleta rojo/blanco)
+  js/
+    api.js                    # fetch base + manejo de sesión
+    layout.js                 # menú lateral y permisos
+    ui.js                     # helpers de UI (modales, tooltips, tablas)
+    <página>.js               # un script por página
+  img/                        # logos y favicon
 ```
 
 Cada módulo del backend sigue el mismo patrón `routes -> controllers -> services`.
-En el frontend, cada página carga `api.js` (base) y `layout.js` (menú/permisos)
+En el frontend, cada página carga `api.js`, `ui.js` y `layout.js` (compartidos)
 antes de su propio script.
 
 Para agregar un módulo nuevo: crea `services/xService.js`, `controllers/xController.js`
-y `routes/x.routes.js`, móntalo en `server.js`, y añade su página + script en `public/`.
+y `routes/x.routes.js` dentro de `backend/src/`, móntalo en `server.js`, y añade su
+página + script en `frontend/`.
 
 ## Stack Tecnológico
 
@@ -62,9 +80,9 @@ npm install
 ```bash
 cp .env.example .env
 ```
-Editar `.env` con sus credenciales de MySQL.
+Editar `.env` con las credenciales de MySQL (locales o de una instancia en la nube).
 
-4. Crear la base de datos:
+4. Crear la base de datos (solo si es una base nueva):
 ```bash
 mysql -u root -p < schema.sql
 ```
@@ -77,6 +95,40 @@ npm start
 ```
 
 6. Acceder a la aplicación en: http://localhost:3000
+
+> El servidor sirve `frontend/` como archivos estáticos y expone la API bajo `/api/*`.
+
+## Despliegue en Render
+
+El despliegue está definido en `backend/render.yml` (Blueprint de Render). Desde
+febrero de 2026 Render permite rutas personalizadas para el Blueprint: al crear un
+Blueprint (New + > Blueprint) se debe indicar `backend/render.yml` como
+"Blueprint file path".
+
+Configuración del servicio web:
+
+- Build: `cd backend && npm install`
+- Start: `cd backend && npm start`
+- Health check: `/`
+- Región: `frankfurt`, plan `free`
+
+La base de datos es un MySQL externo (Render solo ofrece PostgreSQL). Las
+credenciales se configuran como variables de entorno del servicio en el dashboard
+y **nunca** se escriben en el YAML ni en el repositorio (en `render.yml` van con
+`sync: false`):
+
+| Variable | Valor |
+|---|---|
+| `DB_HOST` | host de la BD |
+| `DB_PORT` | puerto de la BD |
+| `DB_USER` | usuario de la BD |
+| `DB_PASSWORD` | contraseña de la BD (marcar como secreto) |
+| `DB_NAME` | `bitacora_incidencias` |
+| `SESSION_SECRET` | cadena larga y aleatoria (distinta de la de desarrollo) |
+| `NODE_ENV` | `production` |
+
+El plan free de Render suspende la instancia tras unos minutos de inactividad; la
+primera petición después de eso tarda unos segundos (cold start).
 
 ## Credenciales por Defecto
 
@@ -102,7 +154,7 @@ El Dashboard es un módulo exclusivo: **solo es visible y accesible para usuario
 `VER_DASHBOARD` se incluye en el catálogo inicial de permisos en `schema.sql`. Esta regla se aplica en tres capas:
 
 1. **Backend**: todas las rutas de `/api/dashboard/*` exigen `requirePermission('VER_DASHBOARD')`.
-2. **Menú lateral** (`layout.js`): el enlace "Dashboard" solo se muestra con `VER_DASHBOARD`.
+2. **Menú lateral** (`frontend/js/layout.js`): el enlace "Dashboard" solo se muestra con `VER_DASHBOARD`.
 3. **Acceso directo** (`dashboard.html`): al entrar sin `VER_DASHBOARD`, el usuario es redirigido a la primera página que sí puede ver. El login también aterriza en la primera página permitida (no siempre en el Dashboard).
 
 ## Arquitectura de Permisos
@@ -115,7 +167,7 @@ Los permisos se obtienen desde la tabla `roles_permisos` (plantilla). Aplica a t
 ### Lógica B (roles tipo = 'PERSONALIZADO')
 Los permisos se obtienen desde la tabla `usuarios_roles_permisos` (solo para el par (usuario_id, rol_id) con `concedido = TRUE`). 
 
-La separación entre ambas lógicas se garantiza en `permisosService.js` (backend), nunca en BD.
+La separación entre ambas lógicas se garantiza en `backend/src/services/permisosService.js` (backend), nunca en BD.
 
 ## Cálculo de tiempo_solucion
 
@@ -138,3 +190,6 @@ El gráfico "Top responsables actuales que más incidencias han atendido" en el 
 - Validación de datos con `express-validator`
 - Headers de seguridad con `helmet`
 - CORS configurado apropiadamente
+- Los archivos `.env` con credenciales reales no se versionan (`.gitignore`); en el repo solo vive `.env.example` con valores de ejemplo
+- En producción (`NODE_ENV=production`) los secretos `DB_*` y `SESSION_SECRET` se configuran como variables de entorno del servicio en Render, nunca en `render.yml` ni en el código
+- Si una credencial llegó a commitearse, se debe rotar en el proveedor de la BD (Aiven) y actualizar la variable de entorno del despliegue

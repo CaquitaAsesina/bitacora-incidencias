@@ -23,13 +23,13 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-import authRoutes from './src/routes/auth.routes.js';
-import usuariosRoutes from './src/routes/usuarios.routes.js';
-import rolesRoutes from './src/routes/roles.routes.js';
-import permisosRoutes from './src/routes/permisos.routes.js';
-import incidenciasRoutes from './src/routes/incidencias.routes.js';
-import dashboardRoutes from './src/routes/dashboard.routes.js';
-import { errorHandler } from './src/middlewares/errorHandler.js';
+import authRoutes from './routes/auth.routes.js';
+import usuariosRoutes from './routes/usuarios.routes.js';
+import rolesRoutes from './routes/roles.routes.js';
+import permisosRoutes from './routes/permisos.routes.js';
+import incidenciasRoutes from './routes/incidencias.routes.js';
+import dashboardRoutes from './routes/dashboard.routes.js';
+import { errorHandler } from './middlewares/errorHandler.js';
 
 dotenv.config();
 
@@ -87,7 +87,7 @@ app.use(
 // ---------------------------------------------------------------------
 // Frontend estático (HTML/CSS/JS sin build)
 // ---------------------------------------------------------------------
-app.use(express.static(path.join(__dirname, 'src/public')));
+app.use(express.static(path.join(__dirname, '../../frontend')));
 
 // ---------------------------------------------------------------------
 // Rutas API
@@ -106,7 +106,7 @@ app.use('/api', (req, res) => {
 
 // Fallback SPA: cualquier ruta no-API devuelve el login
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'src/public/index.html'));
+  res.sendFile(path.join(__dirname, '../../frontend/index.html'));
 });
 
 // Manejo central de errores (siempre al final)

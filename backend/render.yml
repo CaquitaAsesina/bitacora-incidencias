@@ -1,0 +1,42 @@
+# =====================================================================
+# render.yml — Blueprint de despliegue en Render
+# =====================================================================
+# Uso: en Render, crear un Blueprint (New + > Blueprint) apuntando a este
+# repositorio y establecer "Blueprint file path" = backend/render.yml
+# (Render permite rutas y nombres personalizados desde febrero de 2026).
+#
+# El frontend se sirve desde la carpeta /frontend por el propio Express,
+# por eso el build y el start se ejecutan desde la raíz del repo con
+# `cd backend` (así /frontend queda disponible en el runtime).
+#
+# La base de datos es un MySQL externo (Aiven); Render no ofrece MySQL.
+# Las credenciales NO se escriben aquí: se configuran como variables de
+# entorno del servicio (sync: false = Render las pedirá en el dashboard).
+# =====================================================================
+
+services:
+  - type: web
+    name: bitacora-incidencias
+    runtime: node
+    plan: free
+    region: frankfurt # cercana a la BD MySQL (Aiven, Frankfurt)
+    branch: main
+    autoDeployTrigger: commit
+    buildCommand: cd backend && npm install
+    startCommand: cd backend && npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DB_NAME
+        value: bitacora_incidencias
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
