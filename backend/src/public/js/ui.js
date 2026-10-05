@@ -211,15 +211,17 @@
   // ==================================================================
   // 6. Recorte de datos en tablas + tooltip con el valor completo
   // ==================================================================
-  // Regla: el dato de una celda nunca debe ensanchar la columna más que su
-  // encabezado. Si el texto no cabe, se recorta con "..." y al pasar el mouse
-  // aparece una cajita negra con el dato completo.
+  // Regla: solo se recortan las celdas de TEXTO cuyo contenido desborda "por
+  // mucho" el ancho de su columna (el del encabezado, con un mínimo de 70 px).
+  // La medida se hace siempre con una sonda oculta, nunca con el layout real.
+  // Únicamente las celdas que quedan recortadas muestran la cajita negra con
+  // el dato completo al pasar el cursor por encima de la celda.
   //
-  // Solo se aplica a celdas de TEXTO: las que contienen botones, badges,
-  // inputs o enlaces se dejan intactas para no recortar controles.
+  // Las celdas con botones/badges/inputs/enlaces se dejan intactas.
 
-  const ANCHO_MIN_CELDA = 72;   // px: evita columnas ilegiblemente estrechas
+  const ANCHO_MIN_CELDA = 70;   // px: ancho mínimo de la columna (sonda con mínimo)
   const ANCHO_MAX_CELDA = 260;  // px: tope para textos muy largos
+  const MARGEN_DESBORDE = 1.2;  // solo recorta si el texto supera ~20% lo disponible
 
   let tooltipDato = null;
   let celdaConTooltip = null;
@@ -262,20 +264,27 @@
     celdaConTooltip = null;
   }
 
-  /** Ancho que ocupa el nombre de la columna (su texto, no la columna entera). */
-  function anchoEncabezado(th) {
-    const cs = window.getComputedStyle(th);
+  /** Ancho natural de un texto medido con una sonda oculta y el estilo de `el`. */
+  function anchoTexto(texto, el) {
+    if (!texto) return 0;
+    const cs = window.getComputedStyle(el);
     const sonda = document.createElement('span');
     sonda.style.cssText =
       'position:absolute;visibility:hidden;white-space:nowrap;top:-9999px;left:-9999px;' +
       'font:' + cs.font + ';letter-spacing:' + cs.letterSpacing +
       ';text-transform:' + cs.textTransform + ';';
-    sonda.textContent = th.textContent.trim();
+    sonda.textContent = texto;
     document.body.appendChild(sonda);
     const ancho = sonda.getBoundingClientRect().width;
     sonda.remove();
+    return ancho;
+  }
+
+  /** Ancho que ocupa el nombre de la columna (su texto + padding). */
+  function anchoEncabezado(th) {
+    const cs = window.getComputedStyle(th);
     const pad = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
-    return Math.ceil(ancho + pad);
+    return Math.ceil(anchoTexto(th.textContent.trim(), th) + pad);
   }
 
   /** ¿La celda contiene controles/badges que no deben recortarse? */
@@ -291,21 +300,33 @@
     const anchos = Array.prototype.map.call(ths, function (th) {
       return Math.min(Math.max(anchoEncabezado(th), ANCHO_MIN_CELDA), ANCHO_MAX_CELDA);
     });
+    // Columnas marcadas con .no-recorta (p. ej. fecha/centro/sistema en
+    // incidencias) se ven siempre completas: ni se recortan ni llevan tooltip.
+    const exentas = Array.prototype.map.call(ths, function (th) {
+      return th.classList.contains('no-recorta');
+    });
 
     tabla.querySelectorAll('tbody tr').forEach(function (tr) {
       Array.prototype.forEach.call(tr.children, function (td, i) {
         if (td.hasAttribute('colspan')) return;
-        const tieneTexto = !!td.textContent.trim();
-        // Todas las celdas con dato muestran tooltip al pasar el cursor,
-        // aunque el texto quepa entero en la columna.
-        td.classList.toggle('celda-dato', tieneTexto);
-        // Solo se recortan las celdas de TEXTO (sin botones/badges).
-        const recortable = tieneTexto && !celdaConControles(td) && i < anchos.length;
-        if (recortable) {
-          td.classList.add('celda-recorta');
+        const texto = td.textContent.trim();
+        const cs = window.getComputedStyle(td);
+        const pad = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+        const disponible = Math.max((anchos[i] || 0) - pad, 0);
+        // Solo se recortan celdas de TEXTO (sin botones/badges) cuyo contenido
+        // desborde "por mucho" el ancho disponible de su columna.
+        const desborda = !!texto
+          && !exentas[i]
+          && !celdaConControles(td)
+          && i < anchos.length
+          && anchoTexto(texto, td) > disponible * MARGEN_DESBORDE;
+
+        td.classList.toggle('celda-recorta', desborda);
+        // El tooltip se muestra únicamente en las celdas que quedan recortadas.
+        td.classList.toggle('celda-dato', desborda);
+        if (desborda) {
           td.style.maxWidth = anchos[i] + 'px';
         } else {
-          td.classList.remove('celda-recorta');
           td.style.removeProperty('max-width');
         }
       });
