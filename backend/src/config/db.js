@@ -27,6 +27,10 @@ const pool = mysql.createPool({
   connectionLimit: 10,
   queueLimit: 0,
   charset: 'utf8mb4',
+  // Mantiene vivos los sockets del pool: evita reconexiones (handshake TCP/TLS)
+  // cuando la base remota cierra conexiones inactivas.
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 30000,
 });
 
 export default pool;

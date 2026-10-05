@@ -38,9 +38,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   await cargarDatos();
 });
 
-/** Carga roles (para el filtro) y usuarios. */
+/** Carga roles (para el filtro) y usuarios. Rendimiento: ambas en paralelo. */
 async function cargarDatos() {
-  const rolesRes = await apiRequest('/roles');
+  const [rolesRes, usuariosRes] = await Promise.all([
+    apiRequest('/roles'),
+    apiRequest('/usuarios'),
+  ]);
+
   if (rolesRes.ok) {
     rolesData = rolesRes.data;
     const selectRol = document.getElementById('filtroRol');
@@ -51,12 +55,17 @@ async function cargarDatos() {
     });
     selectRol.value = seleccionActual;
   }
-  await cargarUsuarios();
+
+  aplicarUsuarios(usuariosRes);
 }
 
 /** Carga y normaliza el listado de usuarios. */
 async function cargarUsuarios() {
-  const res = await apiRequest('/usuarios');
+  aplicarUsuarios(await apiRequest('/usuarios'));
+}
+
+/** Aplica la respuesta de /usuarios a la tabla (normaliza el array de roles). */
+function aplicarUsuarios(res) {
   if (res.ok) {
     // El endpoint ya incluye el array `roles` de cada usuario.
     usuariosData = res.data.map(u => ({

@@ -63,37 +63,31 @@ function filtroFechas(filtros = {}) {
 export async function obtenerKPIs(filtros) {
   const f = filtroFechas(filtros);
 
-  // Total incidencias
-  const [totalRows] = await pool.query(`SELECT COUNT(*) as total FROM incidencias WHERE 1=1${f.sql}`, f.params);
-  const total = totalRows[0].total || 0;
-
-  // Abiertas
-  const [abiertasRows] = await pool.query(
-    `SELECT COUNT(*) as abiertas FROM incidencias WHERE hora_fin IS NULL${f.sql}`, f.params
+  // Rendimiento: todos los contadores se obtienen en UNA sola consulta
+  // (agregados condicionales) en lugar de 4 consultas secuenciales + 1 de usuarios.
+  const [rows] = await pool.query(
+    `SELECT
+       COUNT(*) as total,
+       SUM(hora_fin IS NULL) as abiertas,
+       AVG(CASE WHEN hora_fin IS NOT NULL AND tiempo_solucion IS NOT NULL
+                THEN TIME_TO_SEC(tiempo_solucion) END) as promedio_segundos,
+       SUM(fecha = CURDATE()) as hoy,
+       (SELECT COUNT(*) FROM usuarios) as usuarios
+     FROM incidencias WHERE 1=1${f.sql}`,
+    f.params
   );
-  const abiertas = abiertasRows[0].abiertas || 0;
+
+  const row = rows[0] || {};
+  const total = Number(row.total) || 0;
+  const abiertas = Number(row.abiertas) || 0;
+  const usuarios = Number(row.usuarios) || 0;
+  let promedioSegundos = Number(row.promedio_segundos) || 0;
+  if (isNaN(promedioSegundos)) promedioSegundos = 0;
+  const promedioHHMMSS = segundosAHHMMSS(Math.floor(promedioSegundos));
+  const hoy = Number(row.hoy) || 0;
 
   // Cerradas
   const cerradas = total - abiertas;
-
-  // Usuarios registrados
-  const [usuariosRows] = await pool.query('SELECT COUNT(*) AS total FROM usuarios');
-  const usuarios = Number(usuariosRows[0].total) || 0;
-
-  // Tiempo promedio de resolución (en segundos, luego convertir a HH:MM:SS)
-  const [promRows] = await pool.query(
-    `SELECT AVG(TIME_TO_SEC(tiempo_solucion)) as promedio_segundos FROM incidencias
-     WHERE hora_fin IS NOT NULL AND tiempo_solucion IS NOT NULL${f.sql}`, f.params
-  );
-  let promedioSegundos = promRows[0].promedio_segundos || 0;
-  if (isNaN(promedioSegundos)) promedioSegundos = 0;
-  const promedioHHMMSS = segundosAHHMMSS(Math.floor(promedioSegundos));
-
-  // Incidencias hoy
-  const [hoyRows] = await pool.query(
-    `SELECT COUNT(*) as hoy FROM incidencias WHERE fecha = CURDATE()${f.sql}`, f.params
-  );
-  const hoy = hoyRows[0].hoy || 0;
 
   // Tasa de resolución
   const tasaResolucion = total === 0 ? 0 : ((cerradas / total) * 100).toFixed(2);
@@ -235,34 +229,36 @@ export async function heatmap() {
 export async function porTiempoSolucion(limite = 30, filtros) {
   const f = filtroFechas(filtros);
 
-  const [rows] = await pool.query(
-    `SELECT 
-       i.id,
-       i.ticket,
-       i.incidencia,
-       i.centro,
-       i.sistema,
-       i.fecha,
-       i.tiempo_solucion,
-       TIME_TO_SEC(i.tiempo_solucion) / 60 as minutos
-     FROM incidencias i
-     WHERE i.hora_fin IS NOT NULL
-       AND i.tiempo_solucion IS NOT NULL${f.sql}
-     ORDER BY i.fecha DESC, i.id DESC
-     LIMIT ?`,
-    [...f.params, Number(limite)]
-  );
-
-  const [stats] = await pool.query(
-    `SELECT
-       COUNT(*) as total,
-       AVG(TIME_TO_SEC(tiempo_solucion) / 60) as promedio_min,
-       MIN(TIME_TO_SEC(tiempo_solucion) / 60) as minimo_min,
-       MAX(TIME_TO_SEC(tiempo_solucion) / 60) as maximo_min
-     FROM incidencias
-     WHERE tiempo_solucion IS NOT NULL${f.sql}`,
-    f.params
-  );
+  // Rendimiento: serie y estadísticas son independientes -> en paralelo.
+  const [[rows], [stats]] = await Promise.all([
+    pool.query(
+      `SELECT 
+         i.id,
+         i.ticket,
+         i.incidencia,
+         i.centro,
+         i.sistema,
+         i.fecha,
+         i.tiempo_solucion,
+         TIME_TO_SEC(i.tiempo_solucion) / 60 as minutos
+       FROM incidencias i
+       WHERE i.hora_fin IS NOT NULL
+         AND i.tiempo_solucion IS NOT NULL${f.sql}
+       ORDER BY i.fecha DESC, i.id DESC
+       LIMIT ?`,
+      [...f.params, Number(limite)]
+    ),
+    pool.query(
+      `SELECT
+         COUNT(*) as total,
+         AVG(TIME_TO_SEC(tiempo_solucion) / 60) as promedio_min,
+         MIN(TIME_TO_SEC(tiempo_solucion) / 60) as minimo_min,
+         MAX(TIME_TO_SEC(tiempo_solucion) / 60) as maximo_min
+       FROM incidencias
+       WHERE tiempo_solucion IS NOT NULL${f.sql}`,
+      f.params
+    ),
+  ]);
 
   return { series: rows, estadisticas: stats[0] };
 }

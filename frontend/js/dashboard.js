@@ -91,8 +91,16 @@ async function cargarGraficos() {
   // Destruir gráficos existentes
   Object.values(charts).forEach(c => c.destroy());
 
+  // Rendimiento: las 4 consultas son independientes -> se lanzan en paralelo
+  // (una sola espera de red en lugar de 4 viajes en serie).
+  const [resPorSistema, resPorTipoCentro, resPorCentro, resPorTipoIncidencia] = await Promise.all([
+    apiRequest(`/dashboard/por-sistema${f}`),
+    apiRequest(`/dashboard/por-tipo-centro${f}`),
+    apiRequest(`/dashboard/por-centro${f}`),
+    apiRequest(`/dashboard/por-tipo-incidencia${f}`),
+  ]);
+
   // Por sistema
-  const resPorSistema = await apiRequest(`/dashboard/por-sistema${f}`);
   if (resPorSistema.ok) {
     const ctx = document.getElementById('chartPorSistema').getContext('2d');
     charts.porSistema = new Chart(ctx, {
@@ -115,7 +123,6 @@ async function cargarGraficos() {
   }
 
   // Por tipo centro
-  const resPorTipoCentro = await apiRequest(`/dashboard/por-tipo-centro${f}`);
   if (resPorTipoCentro.ok) {
     const ctx = document.getElementById('chartPorTipoCentro').getContext('2d');
     charts.porTipoCentro = new Chart(ctx, {
@@ -141,7 +148,6 @@ async function cargarGraficos() {
   }
 
   // Por centro
-  const resPorCentro = await apiRequest(`/dashboard/por-centro${f}`);
   if (resPorCentro.ok) {
     const ctx = document.getElementById('chartPorCentro').getContext('2d');
     charts.porCentro = new Chart(ctx, {
@@ -176,7 +182,6 @@ async function cargarGraficos() {
   }
 
   // Por tipo incidencia
-  const resPorTipoIncidencia = await apiRequest(`/dashboard/por-tipo-incidencia${f}`);
   if (resPorTipoIncidencia.ok) {
     const ctx = document.getElementById('chartPorTipoIncidencia').getContext('2d');
     charts.porTipoIncidencia = new Chart(ctx, {
@@ -316,9 +321,14 @@ async function cargarTodo() {
   cargaEnCurso = true;
 
   try {
-    await cargarKPIs();
-    await cargarGraficos();
-    await cargarGraficoTiempoSolucion();
+    // Rendimiento: las tres secciones son independientes -> en paralelo.
+    // cargarGraficos() se invoca primero para que destruya los gráficos previos
+    // antes de que las demás creen los suyos.
+    await Promise.all([
+      cargarGraficos(),
+      cargarKPIs(),
+      cargarGraficoTiempoSolucion(),
+    ]);
   } finally {
     cargaEnCurso = false;
   }

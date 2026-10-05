@@ -95,8 +95,6 @@ export async function listarIncidencias(filtros = {}, page = 1, limit = 10) {
   query += ' LIMIT ? OFFSET ?';
   params.push(parseInt(limit), parseInt(offset));
 
-  const [rows] = await pool.query(query, params);
-
   // Contar total
   let countQuery = `
     SELECT COUNT(*) as total
@@ -149,7 +147,11 @@ export async function listarIncidencias(filtros = {}, page = 1, limit = 10) {
     countParams.push(`%${filtros.q}%`, `%${filtros.q}%`);
   }
 
-  const [totalRows] = await pool.query(countQuery, countParams);
+  // Rendimiento: listado y conteo son independientes -> en paralelo (un solo viaje).
+  const [[rows], [totalRows]] = await Promise.all([
+    pool.query(query, params),
+    pool.query(countQuery, countParams),
+  ]);
   const total = totalRows[0].total;
 
   return {
@@ -247,26 +249,9 @@ export async function cerrarIncidencia(id, usuarioIdSesion) {
     throw error;
   }
 
-  // Calcular hora_fin = hora actual del servidor
-  const [horaActualRows] = await pool.query('SELECT CURTIME() as hora_fin');
-  const horaFin = horaActualRows[0].hora_fin;
-
-  // Calcular tiempo_solucion = hora_fin - hora_inicio en formato HH:MM:SS
-  // Manejar cruce de medianoche si ocurre
-  const [tiempoSolRows] = await pool.query(
-    'SELECT TIMEDIFF(?, ?) as tiempo_solucion',
-    [horaFin, incidencia.hora_inicio]
-  );
-  let tiempoSolucion = tiempoSolRows[0].tiempo_solucion;
-
-  // Si negativo (cruce de medianoche), sumar 24h
-  if (tiempoSolucion && tiempoSolucion.startsWith('-')) {
-    const [tiempoSolPosRows] = await pool.query(
-      'SELECT ADDTIME(?, "24:00:00") as tiempo_solucion',
-      [tiempoSolucion]
-    );
-    tiempoSolucion = tiempoSolPosRows[0].tiempo_solucion;
-  }
+  // Calcular hora_fin (hora actual del servidor) y tiempo_solucion en una sola consulta
+  const { hora_fin: horaFin, tiempo_solucion: tiempoSolucion } =
+    await resolverHoraFinYTiempoSolucion(null, incidencia.hora_inicio);
 
   // Determinar nuevo usuario_id: si cierra otro usuario distinto, sobreescribir
   let nuevoUsuarioId = incidencia.usuario_id;
@@ -289,17 +274,31 @@ export async function cerrarIncidencia(id, usuarioIdSesion) {
 /**
  * Calcula tiempo_solucion = horaFin - horaInicio en formato HH:MM:SS.
  * Si el resultado es negativo (cruce de medianoche), suma 24 horas.
+ * Rendimiento: una sola consulta (antes podían ser dos).
  */
 async function calcularTiempoSolucion(horaFin, horaInicio) {
-  const [diff] = await pool.query('SELECT TIMEDIFF(?, ?) as tiempo_solucion', [horaFin, horaInicio]);
-  let tiempoSolucion = diff[0].tiempo_solucion;
+  const [rows] = await pool.query(
+    `SELECT SEC_TO_TIME(MOD(TIME_TO_SEC(TIMEDIFF(?, ?)) + 86400, 86400)) AS tiempo_solucion`,
+    [horaFin, horaInicio]
+  );
 
-  if (tiempoSolucion && tiempoSolucion.startsWith('-')) {
-    const [pos] = await pool.query('SELECT ADDTIME(?, "24:00:00") as tiempo_solucion', [tiempoSolucion]);
-    tiempoSolucion = pos[0].tiempo_solucion;
-  }
+  return rows[0].tiempo_solucion;
+}
 
-  return tiempoSolucion;
+/**
+ * Resuelve en una sola consulta la hora de fin (la indicada, o la hora actual
+ * del servidor si llega null) y su tiempo_solucion (con cruce de medianoche).
+ * @returns {Promise<{ hora_fin: string, tiempo_solucion: string }>}
+ */
+async function resolverHoraFinYTiempoSolucion(horaFin, horaInicio) {
+  const [rows] = await pool.query(
+    `SELECT h.hora_fin,
+            SEC_TO_TIME(MOD(TIME_TO_SEC(TIMEDIFF(h.hora_fin, ?)) + 86400, 86400)) AS tiempo_solucion
+     FROM (SELECT COALESCE(?, CURTIME()) AS hora_fin) AS h`,
+    [horaInicio, horaFin]
+  );
+
+  return rows[0];
 }
 
 /**
@@ -352,14 +351,10 @@ export async function actualizarIncidencia(id, data, usuarioIdSesion) {
       throw error;
     }
 
-    // Si no se envia hora_fin, se usa la hora actual del servidor (mismo criterio que cerrarIncidencia)
-    let horaFin = data.hora_fin;
-    if (!horaFin) {
-      const [horaActualRows] = await pool.query('SELECT CURTIME() as hora_fin');
-      horaFin = horaActualRows[0].hora_fin;
-    }
-
-    const tiempoSolucion = await calcularTiempoSolucion(horaFin, horaInicioEfectiva);
+    // Si no se envia hora_fin, se usa la hora actual del servidor (mismo criterio
+    // que cerrarIncidencia). Hora y tiempo_solucion se resuelven en una sola consulta.
+    const { hora_fin: horaFin, tiempo_solucion: tiempoSolucion } =
+      await resolverHoraFinYTiempoSolucion(data.hora_fin || null, horaInicioEfectiva);
 
     updates.push('hora_fin = ?', 'tiempo_solucion = ?');
     params.push(horaFin, tiempoSolucion);

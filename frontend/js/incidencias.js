@@ -52,8 +52,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   CAMPOS_SUGERIDOS.forEach(({ inputId, campo }) => adjuntarSugerencias(inputId, campo));
 
-  await cargarSugerencias();
-  await cargarIncidencias();
+  // Rendimiento: sugerencias y listado son independientes -> en paralelo.
+  await Promise.all([cargarSugerencias(), cargarIncidencias()]);
 });
 
 // Valores sugeridos por campo, cargados del backend
@@ -252,8 +252,7 @@ async function guardarIncidencia() {
   if (res.ok) {
     showToast('Incidencia creada correctamente', 'success');
     modalIncidencia.hide();
-    await cargarSugerencias();
-    await cargarIncidencias();
+    await Promise.all([cargarSugerencias(), cargarIncidencias()]);
   } else {
     showToast(res.mensaje || 'Error al crear incidencia', 'error');
   }

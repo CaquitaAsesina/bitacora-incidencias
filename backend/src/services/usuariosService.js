@@ -16,20 +16,22 @@ import pool from '../config/db.js';
 
 /** @returns {Promise<object[]>} usuarios con su array de roles (evita N+1). */
 export async function listarUsuarios() {
-  const [rows] = await pool.query(
-    `SELECT id, usuario, nombre, apellido, email, telefono, habilitado, creado_en, actualizado_en
-     FROM usuarios
-     ORDER BY id`
-  );
-
-  // Roles asignados por usuario. Se consulta aparte porque un usuario puede tener
-  // N roles y MySQL no soporta JSON_ARRAYAGG ... FILTER (WHERE ...) como SQL estándar.
-  const [rolesRows] = await pool.query(
-    `SELECT ur.usuario_id, r.id, r.nombre, r.tipo
-     FROM usuarios_roles ur
-     INNER JOIN roles r ON r.id = ur.rol_id
-     ORDER BY r.nombre`
-  );
+  // Rendimiento: usuarios y sus roles son independientes -> en paralelo.
+  const [[rows], [rolesRows]] = await Promise.all([
+    pool.query(
+      `SELECT id, usuario, nombre, apellido, email, telefono, habilitado, creado_en, actualizado_en
+       FROM usuarios
+       ORDER BY id`
+    ),
+    // Roles asignados por usuario. Se consulta aparte porque un usuario puede tener
+    // N roles y MySQL no soporta JSON_ARRAYAGG ... FILTER (WHERE ...) como SQL estándar.
+    pool.query(
+      `SELECT ur.usuario_id, r.id, r.nombre, r.tipo
+       FROM usuarios_roles ur
+       INNER JOIN roles r ON r.id = ur.rol_id
+       ORDER BY r.nombre`
+    ),
+  ]);
 
   const rolesPorUsuario = new Map();
   for (const rr of rolesRows) {

@@ -15,18 +15,27 @@
  */
 let userPermissions = [];
 
+// Rendimiento: varias partes de la página invocan checkAuth() en la misma carga
+// (layout.js y el script de la página). Se memoiza la promesa para hacer una
+// única petición a /auth/me por carga de página.
+let checkAuthPromise = null;
+
 /**
  * Verifica la sesión. Si no hay, redirige al login.
  * @returns {Promise<object|null>} datos de /auth/me (y guarda userPermissions) o null.
  */
 async function checkAuth() {
-  const me = await apiRequest('/auth/me');
-  if (!me.ok) {
-    window.location.href = 'index.html';
-    return null;
+  if (!checkAuthPromise) {
+    checkAuthPromise = apiRequest('/auth/me').then((me) => {
+      if (!me.ok) {
+        window.location.href = 'index.html';
+        return null;
+      }
+      userPermissions = me.permisos || [];
+      return me;
+    });
   }
-  userPermissions = me.permisos || [];
-  return me;
+  return checkAuthPromise;
 }
 
 /**

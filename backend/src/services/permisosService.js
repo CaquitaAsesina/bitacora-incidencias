@@ -13,49 +13,33 @@ import pool from '../config/db.js';
  * 
  * LÓGICA B (roles.tipo = 'PERSONALIZADO'):
  *   - Permisos obtenidos desde usuarios_roles_permisos (solo concedido = TRUE)
- * 
+ *
+ * Rendimiento: ambas lógicas se resuelven en UNA sola consulta (UNION) en
+ * lugar de encadenar consultas por cada rol del usuario.
+ *
  * @param {number} usuarioId 
  * @returns {Promise<string[]>} Array de nombres de permisos únicos
  */
 export async function obtenerPermisosEfectivos(usuarioId) {
-  const permisosSet = new Set();
-
-  // Obtener todos los roles asignados al usuario
-  const [rolesUsuario] = await pool.query(
-    `SELECT ur.rol_id, r.tipo, r.nombre
-     FROM usuarios_roles ur
-     INNER JOIN roles r ON r.id = ur.rol_id
-     WHERE ur.usuario_id = ?`,
-    [usuarioId]
+  const [rows] = await pool.query(
+    `SELECT p.nombre
+       FROM usuarios_roles ur
+       INNER JOIN roles r ON r.id = ur.rol_id
+       INNER JOIN roles_permisos rp ON rp.rol_id = ur.rol_id
+       INNER JOIN permisos p ON p.id = rp.permiso_id
+      WHERE ur.usuario_id = ? AND r.tipo = 'SISTEMA'
+     UNION
+     SELECT p.nombre
+       FROM usuarios_roles ur
+       INNER JOIN roles r ON r.id = ur.rol_id
+       INNER JOIN usuarios_roles_permisos urp
+         ON urp.usuario_id = ur.usuario_id AND urp.rol_id = ur.rol_id
+       INNER JOIN permisos p ON p.id = urp.permiso_id
+      WHERE ur.usuario_id = ? AND r.tipo = 'PERSONALIZADO' AND urp.concedido = TRUE`,
+    [usuarioId, usuarioId]
   );
 
-  for (const rol of rolesUsuario) {
-    if (rol.tipo === 'SISTEMA') {
-      // LÓGICA A: obtener permisos desde plantilla roles_permisos
-      const [permisosSistema] = await pool.query(
-        `SELECT p.nombre
-         FROM roles_permisos rp
-         INNER JOIN permisos p ON p.id = rp.permiso_id
-         WHERE rp.rol_id = ?`,
-        [rol.rol_id]
-      );
-
-      permisosSistema.forEach((p) => permisosSet.add(p.nombre));
-    } else if (rol.tipo === 'PERSONALIZADO') {
-      // LÓGICA B: obtener permisos personalizados para (usuario, rol) con concedido = TRUE
-      const [permisosPersonalizados] = await pool.query(
-        `SELECT p.nombre
-         FROM usuarios_roles_permisos urp
-         INNER JOIN permisos p ON p.id = urp.permiso_id
-         WHERE urp.usuario_id = ? AND urp.rol_id = ? AND urp.concedido = TRUE`,
-        [usuarioId, rol.rol_id]
-      );
-
-      permisosPersonalizados.forEach((p) => permisosSet.add(p.nombre));
-    }
-  }
-
-  return Array.from(permisosSet);
+  return rows.map((row) => row.nombre);
 }
 
 /** @returns {Promise<object[]>} catálogo completo de permisos, ordenado por id. */

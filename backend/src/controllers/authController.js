@@ -58,26 +58,27 @@ export async function me(req, res, next) {
   try {
     const userId = req.session.userId;
 
-    const [userRows] = await pool.query(
-      `SELECT id, usuario, nombre, apellido
-       FROM usuarios
-       WHERE id = ?`,
-      [userId]
-    );
+    // Rendimiento: usuario, permisos y roles son independientes -> en paralelo.
+    const [[userRows], permisos, [roles]] = await Promise.all([
+      pool.query(
+        `SELECT id, usuario, nombre, apellido
+         FROM usuarios
+         WHERE id = ?`,
+        [userId]
+      ),
+      permisosService.obtenerPermisosEfectivos(userId),
+      pool.query(
+        `SELECT r.id, r.nombre, r.tipo
+         FROM usuarios_roles ur
+         INNER JOIN roles r ON r.id = ur.rol_id
+         WHERE ur.usuario_id = ?`,
+        [userId]
+      ),
+    ]);
 
     if (userRows.length === 0) {
       return res.status(404).json({ ok: false, mensaje: 'Usuario no encontrado' });
     }
-
-    const permisos = await permisosService.obtenerPermisosEfectivos(userId);
-
-    const [roles] = await pool.query(
-      `SELECT r.id, r.nombre, r.tipo
-       FROM usuarios_roles ur
-       INNER JOIN roles r ON r.id = ur.rol_id
-       WHERE ur.usuario_id = ?`,
-      [userId]
-    );
 
     res.json({
       ok: true,

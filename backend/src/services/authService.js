@@ -49,15 +49,17 @@ export async function login(usuario, contrasena) {
     throw error;
   }
 
-  const permisos = await permisosService.obtenerPermisosEfectivos(user.id);
-
-  const [roles] = await pool.query(
-    `SELECT r.id, r.nombre, r.tipo
-     FROM usuarios_roles ur
-     INNER JOIN roles r ON r.id = ur.rol_id
-     WHERE ur.usuario_id = ?`,
-    [user.id]
-  );
+  // Rendimiento: permisos y roles son independientes -> en paralelo.
+  const [permisos, [roles]] = await Promise.all([
+    permisosService.obtenerPermisosEfectivos(user.id),
+    pool.query(
+      `SELECT r.id, r.nombre, r.tipo
+       FROM usuarios_roles ur
+       INNER JOIN roles r ON r.id = ur.rol_id
+       WHERE ur.usuario_id = ?`,
+      [user.id]
+    ),
+  ]);
 
   return {
     usuario: {
