@@ -212,19 +212,20 @@ INSERT IGNORE INTO permisos (nombre) VALUES
 -- ============================================================
 -- 1) Crear el usuario administrador
 -- ============================================================
--- ⚠️ La contraseña debe ir HASHEADA (bcrypt, argon2, etc.).
---    El hash de abajo corresponde a: admin123  (bcrypt, cost=10)
---    ¡CÁMBIALA en producción!
+-- ⚠️ La contraseña debe ir HASHEADA (bcrypt, cost=10).
+--    El hash de abajo es la contraseña inicial de ejemplo del proyecto.
+--    Cámbiala tras el primer inicio de sesión (módulo Usuarios) y nunca
+--    escribas la contraseña en claro en este archivo ni en el README.
 -- ============================================================
 INSERT IGNORE INTO usuarios
     (usuario, contrasena, nombre, apellido, email, telefono, habilitado)
 VALUES (
     'admin',
-    '$2b$10$kP8pFh0lysUsmzmBM6m1SeAxY9F6ILXi1JQ5YpnxxEEn6mXhDs9Dm',  -- admin123
-    'Jhostin',
-    'Alvarez',
-    'Jhostin.Alvarez@farmacias.peruanas.pe',
-    '902044601',
+    '$2b$10$kP8pFh0lysUsmzmBM6m1SeAxY9F6ILXi1JQ5YpnxxEEn6mXhDs9Dm',
+    'Admin',
+    'Inicial',
+    'admin@example.com',
+    NULL,
     TRUE
 );
 

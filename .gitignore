@@ -8,3 +8,7 @@ node_modules/
 
 # Logs
 *.log
+
+# Metadatos locales de herramientas / sistema operativo
+.freebuff/
+.DS_Store
