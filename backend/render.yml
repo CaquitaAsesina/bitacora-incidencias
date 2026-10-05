@@ -20,7 +20,7 @@ services:
     runtime: node
     plan: free
     region: frankfurt # cercana a la BD MySQL (Aiven, Frankfurt)
-    branch: main
+    branch: incidencias
     autoDeployTrigger: commit
     buildCommand: cd backend && npm install
     startCommand: cd backend && npm start
