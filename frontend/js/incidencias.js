@@ -218,7 +218,7 @@ function renderTabla(incidencias) {
 function renderPaginacion(pagination) {
   const ul = document.getElementById('paginacion');
   ul.innerHTML = '';
-  
+
   for (let i = 1; i <= pagination.totalPages; i++) {
     const li = document.createElement('li');
     li.className = `page-item ${i === pagination.page ? 'active' : ''}`;
@@ -261,7 +261,7 @@ async function guardarIncidencia() {
 window.eliminarIncidencia = async (id) => {
   // uiConfirmar() (js/ui.js) es el equivalente visual del confirm() nativo.
   if (!(await uiConfirmar('¿Eliminar esta incidencia?'))) return;
-  
+
   const res = await apiRequest(`/incidencias/${id}`, {
     method: 'DELETE',
   });
@@ -381,8 +381,8 @@ window.abrirEditarIncidencia = async function (id) {
   document.getElementById('editarResponsable').value = inc.responsable;
   document.getElementById('editarDescripcion').value = inc.descripcion;
   document.getElementById('editarFecha').value = fechaParaInput(inc.fecha);
-  document.getElementById('editarHoraInicio').value = inc.hora_inicio || '';
-  document.getElementById('editarHoraFin').value = inc.hora_fin || '';
+  document.getElementById('editarHoraInicio').value = (inc.hora_inicio || '').slice(0, 5); // "HH:MM"
+  document.getElementById('editarHoraFin').value = (inc.hora_fin || '').slice(0, 5);
 
   const cerrada = inc.hora_fin !== null;
   incidenciaEdicionCerrada = cerrada;
@@ -411,7 +411,14 @@ document.getElementById('btnGuardarEditarIncidencia').addEventListener('click', 
   };
 
   if (fecha) body.fecha = fecha;
-  if (horaInicio) body.hora_inicio = `${horaInicio}:00`;
+  if (horaInicio) body.hora_inicio = normalizarHora(horaInicio);
+  if (horaFin) body.hora_fin = normalizarHora(horaFin);
+
+  if (!incidenciaEdicionCerrada) {
+    body.cerrar = true;
+  } else if (horaFin) {
+    body.hora_fin = normalizarHora(horaFin);
+  }
 
   if (!incidenciaEdicionCerrada) {
     // Incidencia abierta: al guardar se cierra (con la hora indicada o la del servidor).
@@ -451,4 +458,14 @@ function formatDateTime(dateStr) {
   const d = new Date(dateStr);
   if (Number.isNaN(d.getTime())) return dateStr;
   return d.toLocaleString('es-ES');
+}
+
+function normalizarHora(valor) {
+  if (!valor) return '';
+  const partes = String(valor).split(':');
+  if (partes.length < 2) return '';
+  const hh = partes[0].padStart(2, '0');
+  const mm = partes[1].padStart(2, '0');
+  const ss = (partes[2] || '00').slice(0, 2).padStart(2, '0');
+  return `${hh}:${mm}:${ss}`;
 }
