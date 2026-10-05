@@ -15,6 +15,7 @@ const modalIncidencia = new bootstrap.Modal(document.getElementById('modalIncide
 const modalDetalle = new bootstrap.Modal(document.getElementById('modalDetalleIncidencia'));
 const modalEditar = new bootstrap.Modal(document.getElementById('modalEditarIncidencia'));
 let incidenciaEnDetalle = null;
+let incidenciaEdicionCerrada = false;
 
 // Campos del modal Nueva y del modal Modificar que comparten sugerencias
 const CAMPOS_SUGERIDOS = [
@@ -295,6 +296,16 @@ function formatDate(dateStr) {
   return d.toLocaleDateString('es-ES');
 }
 
+/** Convierte una fecha del API al formato YYYY-MM-DD que usa <input type="date">. */
+function fechaParaInput(valor) {
+  if (!valor) return '';
+  const d = new Date(valor);
+  if (Number.isNaN(d.getTime())) return '';
+  const mes = String(d.getMonth() + 1).padStart(2, '0');
+  const dia = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mes}-${dia}`;
+}
+
 // ---------- Ver detalle ----------
 
 window.verIncidencia = async function (id) {
@@ -370,23 +381,25 @@ window.abrirEditarIncidencia = async function (id) {
   document.getElementById('editarIncidencia').value = inc.incidencia;
   document.getElementById('editarResponsable').value = inc.responsable;
   document.getElementById('editarDescripcion').value = inc.descripcion;
-  document.getElementById('editarHoraFin').value = '';
+  document.getElementById('editarFecha').value = fechaParaInput(inc.fecha);
+  document.getElementById('editarHoraInicio').value = inc.hora_inicio || '';
+  document.getElementById('editarHoraFin').value = inc.hora_fin || '';
 
   const cerrada = inc.hora_fin !== null;
-  document.getElementById('editarCerrarCampos').style.display = cerrada ? 'none' : '';
+  incidenciaEdicionCerrada = cerrada;
   document.getElementById('editarCerrarAviso').style.display = cerrada ? 'block' : 'none';
-  if (cerrada) {
-    document.getElementById('editarCerrarAviso').textContent =
-      `Esta incidencia ya está cerrada (${formatDate(inc.fecha)} ${inc.hora_fin}). No se puede volver a cerrar.`;
-  }
+  document.getElementById('editarHoraFinAyuda').textContent = cerrada
+    ? 'Puedes corregir la hora de fin; el tiempo de solución se recalcula.'
+    : 'Si la dejas vacía se usa la hora actual del servidor al guardar (la incidencia se cierra).';
 
   modalEditar.show();
 };
 
 document.getElementById('btnGuardarEditarIncidencia').addEventListener('click', async () => {
   const id = document.getElementById('editarId').value;
+  const fecha = document.getElementById('editarFecha').value;
+  const horaInicio = document.getElementById('editarHoraInicio').value;
   const horaFin = document.getElementById('editarHoraFin').value;
-  const camposVisibles = document.getElementById('editarCerrarCampos').style.display !== 'none';
 
   const body = {
     tipo_centro: document.getElementById('editarTipoCentro').value,
@@ -398,9 +411,16 @@ document.getElementById('btnGuardarEditarIncidencia').addEventListener('click', 
     descripcion: document.getElementById('editarDescripcion').value,
   };
 
-  if (camposVisibles) {
+  if (fecha) body.fecha = fecha;
+  if (horaInicio) body.hora_inicio = `${horaInicio}:00`;
+
+  if (!incidenciaEdicionCerrada) {
+    // Incidencia abierta: al guardar se cierra (con la hora indicada o la del servidor).
     body.cerrar = true;
     if (horaFin) body.hora_fin = `${horaFin}:00`;
+  } else if (horaFin) {
+    // Incidencia ya cerrada: permite corregir la hora de fin.
+    body.hora_fin = `${horaFin}:00`;
   }
 
   const res = await apiRequest(`/incidencias/${id}`, {

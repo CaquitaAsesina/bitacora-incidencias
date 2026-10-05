@@ -54,6 +54,14 @@ async function cargarDatos() {
   renderTablaRoles();
 }
 
+/** Formatea un timestamp del API (creado_en / actualizado_en) en fecha y hora local. */
+function formatFechaHora(valor) {
+  if (!valor) return '-';
+  const d = new Date(valor);
+  if (Number.isNaN(d.getTime())) return '-';
+  return d.toLocaleDateString('es-ES');
+}
+
 /** @returns {object[]} roles que cumplen los filtros de nombre/tipo. */
 function rolesFiltrados() {
   const fNombre = (document.getElementById('filtroNombreRol').value || '').toLowerCase().trim();
@@ -76,7 +84,7 @@ function renderTablaRoles() {
     `Mostrando ${filtrados.length} de ${rolesData.length} rol(es).`;
 
   if (filtrados.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">No hay roles que coincidan con los filtros.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">No hay roles que coincidan con los filtros.</td></tr>';
     return;
   }
 
@@ -90,11 +98,13 @@ function renderTablaRoles() {
       <td><span class="badge ${rol.tipo === 'SISTEMA' ? 'bg-danger' : 'bg-info'}">${rol.tipo}</span></td>
       <td>
         <button class="btn btn-sm btn-outline-secondary" onclick="verUsuariosDeRol(${rol.id})">
-          <i class="bi bi-people"></i> ${cantidad} usuario(s)
+          <i class="bi bi-people"></i> ${cantidad}
         </button>
       </td>
+      <td>${formatFechaHora(rol.creado_en)}</td>
+      <td>${formatFechaHora(rol.actualizado_en)}</td>
       <td>
-        ${hasPermission('CREAR_ROLES') ? `<button class="btn btn-sm btn-primary" onclick="editarRol(${rol.id})" title="Modificar" aria-label="Modificar"><i class="bi bi-pencil"></i></button>` : ''}
+        ${hasPermission('CREAR_ROLES') ? `<button class="btn btn-sm btn-warning ms-1" onclick="editarRol(${rol.id})" title="Modificar" aria-label="Modificar"><i class="bi bi-pencil"></i></button>` : ''}
         ${hasPermission('CREAR_ROLES') ? `<button class="btn btn-sm btn-danger ms-1" onclick="eliminarRol(${rol.id})" title="Eliminar" aria-label="Eliminar"><i class="bi bi-trash"></i></button>` : ''}
       </td>
     `;

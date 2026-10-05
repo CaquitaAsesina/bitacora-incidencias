@@ -50,6 +50,14 @@ const actualizarIncidenciaValidation = [
   body('ticket').optional().notEmpty().isLength({ max: 59 }).trim().escape(),
   body('responsable').optional().notEmpty().isLength({ max: 60 }).trim().escape(),
   body('descripcion').optional().notEmpty().isLength({ max: 255 }).trim().escape(),
+  body('fecha')
+    .optional({ values: 'falsy' })
+    .isISO8601()
+    .withMessage('Fecha inválida'),
+  body('hora_inicio')
+    .optional({ values: 'falsy' })
+    .matches(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/)
+    .withMessage('Hora de inicio inválida'),
   body('hora_fin')
     .optional({ values: 'falsy' })
     .matches(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/)

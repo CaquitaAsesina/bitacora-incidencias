@@ -16,8 +16,9 @@ import pool from '../config/db.js';
  * 
  * REGLAS CRÍTICAS:
  * - Al crear: usuario_id = sesion.id (nunca viene del body). responsable = texto libre del body.
- * - fecha, hora_inicio, creado_en, actualizado_en -> MySQL (DEFAULT/ON UPDATE). 
+ * - Al crear: fecha, hora_inicio, creado_en, actualizado_en -> MySQL (DEFAULT/ON UPDATE). 
  * - hora_fin, tiempo_solucion -> NULL al crear.
+ * - Al modificar: fecha y hora_inicio son editables; hora_fin también y se recalcula tiempo_solucion.
  * - Al cerrar: hora_fin = hora actual servidor. tiempo_solucion = HH:MM:SS (hora_fin - hora_inicio).
  * - Si sesion.id !== usuario_id -> usuario_id = sesion.id (sobreescribe: quien cierra pasa a ser responsable)
  * - Si sesion.id === usuario_id -> usuario_id queda igual.
@@ -286,9 +287,28 @@ export async function cerrarIncidencia(id, usuarioIdSesion) {
 }
 
 /**
+ * Calcula tiempo_solucion = horaFin - horaInicio en formato HH:MM:SS.
+ * Si el resultado es negativo (cruce de medianoche), suma 24 horas.
+ */
+async function calcularTiempoSolucion(horaFin, horaInicio) {
+  const [diff] = await pool.query('SELECT TIMEDIFF(?, ?) as tiempo_solucion', [horaFin, horaInicio]);
+  let tiempoSolucion = diff[0].tiempo_solucion;
+
+  if (tiempoSolucion && tiempoSolucion.startsWith('-')) {
+    const [pos] = await pool.query('SELECT ADDTIME(?, "24:00:00") as tiempo_solucion', [tiempoSolucion]);
+    tiempoSolucion = pos[0].tiempo_solucion;
+  }
+
+  return tiempoSolucion;
+}
+
+/**
  * Modifica los campos editables de una incidencia y, opcionalmente, la cierra.
- * - Si `cerrar` es true: exige hora_fin y calcula tiempo_solucion = hora_fin - hora_inicio.
- * - usuario_id, fecha y hora_inicio no se modifican (los define MySQL al crear).
+ * - fecha y hora_inicio son editables.
+ * - Si `cerrar` es true: fija hora_fin (o la hora actual del servidor si no llega)
+ *   y calcula tiempo_solucion con la hora de inicio efectiva de esta petición.
+ * - Si la incidencia ya está cerrada y llega `hora_fin`, se corrige y se recalcula tiempo_solucion.
+ * - usuario_id solo cambia al cerrar si lo hace otro usuario.
  */
 export async function actualizarIncidencia(id, data, usuarioIdSesion) {
   const incidencia = await obtenerIncidenciaPorId(id);
@@ -302,7 +322,7 @@ export async function actualizarIncidencia(id, data, usuarioIdSesion) {
   const updates = [];
   const params = [];
 
-  const camposEditables = ['tipo_centro', 'centro', 'sistema', 'incidencia', 'responsable', 'descripcion'];
+  const camposEditables = ['tipo_centro', 'centro', 'sistema', 'incidencia', 'responsable', 'descripcion', 'fecha', 'hora_inicio'];
   for (const campo of camposEditables) {
     if (data[campo] !== undefined) {
       updates.push(`${campo} = ?`);
@@ -321,6 +341,10 @@ export async function actualizarIncidencia(id, data, usuarioIdSesion) {
     params.push(data.ticket);
   }
 
+  // Hora de inicio efectiva: si esta misma petición la modifica, el cálculo de
+  // tiempo_solucion debe usar la nueva, no la guardada.
+  const horaInicioEfectiva = data.hora_inicio || incidencia.hora_inicio;
+
   if (data.cerrar) {
     if (incidencia.hora_fin !== null) {
       const error = new Error('La incidencia ya está cerrada');
@@ -335,16 +359,7 @@ export async function actualizarIncidencia(id, data, usuarioIdSesion) {
       horaFin = horaActualRows[0].hora_fin;
     }
 
-    const [diff] = await pool.query('SELECT TIMEDIFF(?, ?) as tiempo_solucion', [
-      horaFin,
-      incidencia.hora_inicio,
-    ]);
-    let tiempoSolucion = diff[0].tiempo_solucion;
-
-    if (tiempoSolucion && tiempoSolucion.startsWith('-')) {
-      const [pos] = await pool.query('SELECT ADDTIME(?, "24:00:00") as tiempo_solucion', [tiempoSolucion]);
-      tiempoSolucion = pos[0].tiempo_solucion;
-    }
+    const tiempoSolucion = await calcularTiempoSolucion(horaFin, horaInicioEfectiva);
 
     updates.push('hora_fin = ?', 'tiempo_solucion = ?');
     params.push(horaFin, tiempoSolucion);
@@ -353,6 +368,13 @@ export async function actualizarIncidencia(id, data, usuarioIdSesion) {
       updates.push('usuario_id = ?');
       params.push(usuarioIdSesion);
     }
+  } else if (data.hora_fin) {
+    // Incidencia ya cerrada: se permite corregir la hora de fin y se
+    // recalcula tiempo_solucion con la hora de inicio efectiva.
+    const tiempoSolucion = await calcularTiempoSolucion(data.hora_fin, horaInicioEfectiva);
+
+    updates.push('hora_fin = ?', 'tiempo_solucion = ?');
+    params.push(data.hora_fin, tiempoSolucion);
   }
 
   if (updates.length === 0) {

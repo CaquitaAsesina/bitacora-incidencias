@@ -72,6 +72,14 @@ async function cargarDatos() {
   renderTablaPermisos();
 }
 
+/** Formatea un timestamp del API (creado_en / actualizado_en) en fecha y hora local. */
+function formatFechaHora(valor) {
+  if (!valor) return '-';
+  const d = new Date(valor);
+  if (Number.isNaN(d.getTime())) return '-';
+  return d.toLocaleDateString('es-ES');
+}
+
 /** Pinta la tabla de permisos aplicando el filtro por nombre. */
 function renderTablaPermisos() {
   const tbody = document.getElementById('tablaPermisosBody');
@@ -83,7 +91,7 @@ function renderTablaPermisos() {
     : permisosData;
 
   if (permisosFiltrados.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-4">No hay permisos que coincidan con la búsqueda</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">No hay permisos que coincidan con la búsqueda</td></tr>';
     return;
   }
 
@@ -92,8 +100,10 @@ function renderTablaPermisos() {
     tr.innerHTML = `
       <td>${p.id}</td>
       <td>${p.nombre}</td>
+      <td>${formatFechaHora(p.creado_en)}</td>
+      <td>${formatFechaHora(p.actualizado_en)}</td>
       <td>
-        ${hasPermission('CREAR_PERMISOS') ? `<button class="btn btn-sm btn-primary" onclick="editarPermiso(${p.id})" title="Modificar" aria-label="Modificar"><i class="bi bi-pencil"></i></button>` : ''}
+        ${hasPermission('CREAR_PERMISOS') ? `<button class="btn btn-sm btn-warning ms-1" onclick="editarPermiso(${p.id})" title="Modificar" aria-label="Modificar"><i class="bi bi-pencil"></i></button>` : ''}
         ${hasPermission('CREAR_PERMISOS') ? `<button class="btn btn-sm btn-danger ms-1" onclick="eliminarPermiso(${p.id})" title="Eliminar" aria-label="Eliminar"><i class="bi bi-trash"></i></button>` : ''}
       </td>
     `;

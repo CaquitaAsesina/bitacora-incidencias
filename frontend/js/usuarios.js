@@ -67,6 +67,13 @@ async function cargarUsuarios() {
   }
 }
 
+function formatFechaHora(valor) {
+  if (!valor) return '-';
+  const d = new Date(valor);
+  if (Number.isNaN(d.getTime())) return '-';
+  return d.toLocaleDateString('es-ES');
+}
+
 /** Normaliza texto (minúsculas y sin acentos) para búsquedas. */
 function normalizar(valor) {
   return (valor || '')
@@ -106,7 +113,7 @@ function renderTablaUsuarios() {
     `Mostrando ${filtrados.length} de ${usuariosData.length} usuario(s).`;
 
   if (filtrados.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">No hay usuarios que coincidan con los filtros.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted py-4">No hay usuarios que coincidan con los filtros.</td></tr>';
     return;
   }
 
@@ -127,8 +134,10 @@ function renderTablaUsuarios() {
       <td>${usuario.telefono || '-'}</td>
       <td>${usuario.habilitado ? '<span class="badge bg-success">Sí</span>' : '<span class="badge bg-danger">No</span>'}</td>
       <td>${rolesHtml}</td>
+      <td>${formatFechaHora(usuario.creado_en)}</td>
+      <td>${formatFechaHora(usuario.actualizado_en)}</td>
       <td>
-        ${hasPermission('CREAR_USUARIO') ? `<button class="btn btn-sm btn-primary" onclick="editarUsuario(${usuario.id})" title="Modificar" aria-label="Modificar"><i class="bi bi-pencil"></i></button>` : ''}
+        ${hasPermission('CREAR_USUARIO') ? `<button class="btn btn-sm btn-warning ms-1" onclick="editarUsuario(${usuario.id})" title="Modificar" aria-label="Modificar"><i class="bi bi-pencil"></i></button>` : ''}
         ${hasPermission('CREAR_USUARIO') ? `<button class="btn btn-sm btn-danger ms-1" onclick="eliminarUsuario(${usuario.id})" title="Eliminar" aria-label="Eliminar"><i class="bi bi-trash"></i></button>` : ''}
       </td>
     `;

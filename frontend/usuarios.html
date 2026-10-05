@@ -105,7 +105,15 @@
                         <i class="bi bi-funnel"></i> <strong>Filtros</strong>
                     </div>
                     <div class="card-body">
-                        <div class="row g-2">
+                        <div class="row g-3">
+                            <div class="col-md-2">
+                                <label class="form-label form-label-sm">Desde</label>
+                                <input type="date" class="form-control form-control-sm" id="filtroDesde">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label form-label-sm">Hasta</label>
+                                <input type="date" class="form-control form-control-sm" id="filtroHasta">
+                            </div>
                             <div class="col-6 col-md-4 col-lg-2">
                                 <label class="form-label mb-1 small">Usuario</label>
                                 <input type="text" class="form-control form-control-sm" id="filtroUsuario"
@@ -161,8 +169,10 @@
                                         <th>Apellido</th>
                                         <th>Email</th>
                                         <th>Teléfono</th>
-                                        <th>Habilitado</th>
+                                        <th>Activo</th>
                                         <th>Rol</th>
+                                        <th>Creacion</th>
+                                        <th>Modificado</th>
                                         <th>Acciones</th>
                                     </tr>
                                 </thead>
@@ -178,7 +188,7 @@
                             <img src="img/logo-isotipo.png" alt="" class="ui-logo-footer">
                             Farmacias Peruanas
                         </span>
-                        <span>Área de Tecnología · Bitácora de Incidencias</span>
+                        <span>Ingenieria Logística · Bitácora de Incidencias</span>
                     </div>
                 </footer>
             </main>

@@ -204,7 +204,7 @@
                             <img src="img/logo-isotipo.png" alt="" class="ui-logo-footer">
                             Farmacias Peruanas
                         </span>
-                        <span>Área de Tecnología · Bitácora de Incidencias</span>
+                        <span>Ingenieria Logística · Bitácora de Incidencias</span>
                     </div>
                 </footer>
             </main>
@@ -247,7 +247,7 @@
                                 <input type="text" class="form-control" id="ticket" maxlength="59" required>
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label">Responsable (Texto libre) *</label>
+                                <label class="form-label">Responsable *</label>
                                 <input type="text" class="form-control" id="responsable" maxlength="60" required>
                             </div>
                             <div class="col-12">
@@ -350,16 +350,24 @@
                     </div>
 
                     <hr>
-                    <h6 class="fw-bold">Cerrar incidencia</h6>
-                    <div id="editarCerrarAviso" class="alert alert-success py-2">
-                        Esta incidencia ya está cerrada. No se puede volver a cerrar.
-                    </div>
-                    <div id="editarCerrarCampos" class="row g-3">
-                        <div class="col-md-6">
+                    <h6 class="fw-bold">Tiempos</h6>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Fecha *</label>
+                            <input type="date" class="form-control" id="editarFecha" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Hora de inicio *</label>
+                            <input type="time" class="form-control" id="editarHoraInicio" required>
+                        </div>
+                        <div class="col-md-4">
                             <label class="form-label">Hora de fin</label>
                             <input type="time" class="form-control" id="editarHoraFin">
-                            <div class="form-text">Si la dejas vacía se usa la hora actual del servidor.</div>
+                            <div class="form-text" id="editarHoraFinAyuda">Si la dejas vacía se usa la hora actual del servidor.</div>
                         </div>
+                    </div>
+                    <div id="editarCerrarAviso" class="alert alert-success py-2 mb-0">
+                        Esta incidencia ya está cerrada. Puedes corregir la hora de fin si lo necesitas.
                     </div>
                 </div>
                 <div class="modal-footer">
