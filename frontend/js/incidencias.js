@@ -291,13 +291,22 @@ function limpiarFiltros() {
 }
 
 function formatDate(dateStr) {
+  if (!dateStr) return '-';
+  // Si ya viene como "YYYY-MM-DD", parsear como fecha local (no UTC).
+  if (typeof dateStr === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString('es-ES');
+  }
   const d = new Date(dateStr);
-  return d.toLocaleDateString('es-ES');
+  return Number.isNaN(d.getTime()) ? dateStr : d.toLocaleDateString('es-ES');
 }
 
 /** Convierte una fecha del API al formato YYYY-MM-DD que usa <input type="date">. */
 function fechaParaInput(valor) {
   if (!valor) return '';
+  if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(valor)) {
+    return valor; // ya está en el formato correcto
+  }
   const d = new Date(valor);
   if (Number.isNaN(d.getTime())) return '';
   const mes = String(d.getMonth() + 1).padStart(2, '0');
@@ -412,21 +421,15 @@ document.getElementById('btnGuardarEditarIncidencia').addEventListener('click', 
 
   if (fecha) body.fecha = fecha;
   if (horaInicio) body.hora_inicio = normalizarHora(horaInicio);
-  if (horaFin) body.hora_fin = normalizarHora(horaFin);
 
   if (!incidenciaEdicionCerrada) {
+    // Incidencia abierta: al guardar se cierra.
+    // Si hay horaFin, se usa; si no, el backend usa la hora del servidor.
     body.cerrar = true;
+    if (horaFin) body.hora_fin = normalizarHora(horaFin);
   } else if (horaFin) {
+    // Incidencia ya cerrada: solo se corrige la hora_fin si la cambiaron.
     body.hora_fin = normalizarHora(horaFin);
-  }
-
-  if (!incidenciaEdicionCerrada) {
-    // Incidencia abierta: al guardar se cierra (con la hora indicada o la del servidor).
-    body.cerrar = true;
-    if (horaFin) body.hora_fin = `${horaFin}:00`;
-  } else if (horaFin) {
-    // Incidencia ya cerrada: permite corregir la hora de fin.
-    body.hora_fin = `${horaFin}:00`;
   }
 
   const res = await apiRequest(`/incidencias/${id}`, {
@@ -443,7 +446,6 @@ document.getElementById('btnGuardarEditarIncidencia').addEventListener('click', 
     showToast(res.mensaje || 'Error al actualizar la incidencia', 'error');
   }
 });
-
 // ---------- helpers ----------
 
 /** Escapa texto para insertarlo seguro en HTML. */
