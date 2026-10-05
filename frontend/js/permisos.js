@@ -5,7 +5,8 @@
  * CRUD de permisos + asignación de permisos a roles SISTEMA (Lógica A) y a
  * usuarios con rol PERSONALIZADO (Lógica B).
  *
- * El buscador de permisos filtra por nombre. Los modales generan checkboxes
+ * La tabla se filtra por nombre y por rango de fechas (creación/modificación),
+ * en vivo, sin recargar. Los modales generan checkboxes
  * dinámicos de todos los permisos disponibles.
  *
  * Para extender: reutiliza filaPermisoAsignado() para chips de permisos
@@ -45,9 +46,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   document.getElementById('btnLimpiar').addEventListener('click', () => {
     document.getElementById('filtroNombre').value = '';
+    document.getElementById('filtroDesde').value = '';
+    document.getElementById('filtroHasta').value = '';
     filtroNombreActual = '';
     renderTablaPermisos();
   });
+
+  // Filtrado en vivo: nombre y rango de fechas, sin recargar la tabla.
+  document.getElementById('filtroNombre').addEventListener('input', () => {
+    filtroNombreActual = document.getElementById('filtroNombre').value;
+    renderTablaPermisos();
+  });
+  document.getElementById('filtroDesde').addEventListener('input', renderTablaPermisos);
+  document.getElementById('filtroHasta').addEventListener('input', renderTablaPermisos);
 
   document.getElementById('filtroNombre').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
@@ -85,10 +96,17 @@ function renderTablaPermisos() {
   const tbody = document.getElementById('tablaPermisosBody');
   tbody.innerHTML = '';
 
+  // Rango de fechas: coincide si la creación o la última modificación del
+  // permiso caen dentro de [desde, hasta].
+  const fDesde = document.getElementById('filtroDesde').value;
+  const fHasta = document.getElementById('filtroHasta').value;
   const filtro = filtroNombreActual.trim().toLowerCase();
-  const permisosFiltrados = filtro
-    ? permisosData.filter(p => p.nombre.toLowerCase().includes(filtro))
-    : permisosData;
+
+  const permisosFiltrados = permisosData.filter((p) => {
+    if (filtro && !p.nombre.toLowerCase().includes(filtro)) return false;
+    if (!fechaDentroDeRango(p.creado_en, fDesde, fHasta) && !fechaDentroDeRango(p.actualizado_en, fDesde, fHasta)) return false;
+    return true;
+  });
 
   if (permisosFiltrados.length === 0) {
     tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">No hay permisos que coincidan con la búsqueda</td></tr>';

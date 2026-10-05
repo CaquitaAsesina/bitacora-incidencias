@@ -80,6 +80,31 @@ async function apiRequest(endpoint, options = {}) {
 }
 
 /**
+ * Comprueba si una fecha del API (ISO/timestamp) cae dentro de un rango local
+ * [desde, hasta] en formato YYYY-MM-DD (ambos extremos opcionales e inclusivos).
+ * Se usa en los filtros de fecha de las tablas.
+ * @param {string|null} valor timestamp del API (p. ej. creado_en)
+ * @param {string} desde fecha YYYY-MM-DD o ''
+ * @param {string} hasta fecha YYYY-MM-DD o ''
+ * @returns {boolean}
+ */
+function fechaDentroDeRango(valor, desde, hasta) {
+  if (!desde && !hasta) return true;
+  if (!valor) return false;
+
+  const d = new Date(valor);
+  if (Number.isNaN(d.getTime())) return false;
+
+  const mes = String(d.getMonth() + 1).padStart(2, '0');
+  const dia = String(d.getDate()).padStart(2, '0');
+  const fecha = `${d.getFullYear()}-${mes}-${dia}`;
+
+  if (desde && fecha < desde) return false;
+  if (hasta && fecha > hasta) return false;
+  return true;
+}
+
+/**
  * Muestra una notificación Bootstrap.
  * @param {string} message
  * @param {'info'|'success'|'warning'|'error'} [type]

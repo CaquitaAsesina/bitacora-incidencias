@@ -33,10 +33,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   document.getElementById('filtroNombreRol').addEventListener('input', renderTablaRoles);
   document.getElementById('filtroTipoRol').addEventListener('change', renderTablaRoles);
+  document.getElementById('filtroDesde').addEventListener('input', renderTablaRoles);
+  document.getElementById('filtroHasta').addEventListener('input', renderTablaRoles);
   document.getElementById('btnFiltrarRoles').addEventListener('click', renderTablaRoles);
   document.getElementById('btnLimpiarFiltrosRoles').addEventListener('click', () => {
     document.getElementById('filtroNombreRol').value = '';
     document.getElementById('filtroTipoRol').value = '';
+    document.getElementById('filtroDesde').value = '';
+    document.getElementById('filtroHasta').value = '';
     renderTablaRoles();
   });
 
@@ -64,10 +68,15 @@ function formatFechaHora(valor) {
 
 /** @returns {object[]} roles que cumplen los filtros de nombre/tipo. */
 function rolesFiltrados() {
+  // Rango de fechas: coincide si la creación o la última modificación del rol
+  // caen dentro de [desde, hasta].
+  const fDesde = document.getElementById('filtroDesde').value;
+  const fHasta = document.getElementById('filtroHasta').value;
   const fNombre = (document.getElementById('filtroNombreRol').value || '').toLowerCase().trim();
   const fTipo = document.getElementById('filtroTipoRol').value;
 
   return rolesData.filter((rol) => {
+    if (!fechaDentroDeRango(rol.creado_en, fDesde, fHasta) && !fechaDentroDeRango(rol.actualizado_en, fDesde, fHasta)) return false;
     if (fNombre && !rol.nombre.toLowerCase().includes(fNombre)) return false;
     if (fTipo && rol.tipo !== fTipo) return false;
     return true;

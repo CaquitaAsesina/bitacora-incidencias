@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   document.getElementById('btnGuardarUsuario').addEventListener('click', guardarUsuario);
 
-  const idsFiltro = ['filtroUsuario', 'filtroNombre', 'filtroEmail', 'filtroTelefono'];
+  const idsFiltro = ['filtroDesde', 'filtroHasta', 'filtroUsuario', 'filtroNombre', 'filtroEmail', 'filtroTelefono'];
   idsFiltro.forEach((id) => {
     document.getElementById(id).addEventListener('input', renderTablaUsuarios);
   });
@@ -94,6 +94,10 @@ function normalizar(valor) {
 
 /** @returns {object[]} usuarios que cumplen los filtros activos. */
 function usuariosFiltrados() {
+  // Rango de fechas: coincide si la creación o la última modificación del
+  // usuario caen dentro de [desde, hasta].
+  const fDesde = document.getElementById('filtroDesde').value;
+  const fHasta = document.getElementById('filtroHasta').value;
   const fUsuario = normalizar(document.getElementById('filtroUsuario').value.trim());
   const fNombre = normalizar(document.getElementById('filtroNombre').value.trim());
   const fEmail = normalizar(document.getElementById('filtroEmail').value.trim());
@@ -102,6 +106,7 @@ function usuariosFiltrados() {
   const fHabilitado = document.getElementById('filtroHabilitado').value;
 
   return usuariosData.filter((u) => {
+    if (!fechaDentroDeRango(u.creado_en, fDesde, fHasta) && !fechaDentroDeRango(u.actualizado_en, fDesde, fHasta)) return false;
     if (fUsuario && !normalizar(u.usuario).includes(fUsuario)) return false;
     if (fNombre && !normalizar(`${u.nombre} ${u.apellido}`).includes(fNombre)) return false;
     if (fEmail && !normalizar(u.email).includes(fEmail)) return false;
