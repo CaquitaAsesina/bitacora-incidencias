@@ -248,7 +248,7 @@ function renderTabla(incidencias) {
 
   if (incidencias.length === 0) {
     tbody.innerHTML =
-      '<tr><td colspan="16" class="text-center text-muted py-4">No hay incidencias</td></tr>';
+      '<tr><td colspan="17" class="text-center text-muted py-4">No hay incidencias</td></tr>';
     return;
   }
 
@@ -265,13 +265,15 @@ function renderTabla(incidencias) {
       <td>${escaparHtml(inc.sistema)}</td>
       <td>${escaparHtml(inc.incidencia)}</td>
       <td>${escaparHtml(inc.responsable)}</td>
-      <td title="${escaparHtml(inc.creado_por_usuario || '')}">${autorLegible(inc.creado_por_nombre, inc.creado_por_usuario, inc.creado_por)}</td>
-      <td title="${escaparHtml(inc.actualizado_por_usuario || '')}">${autorLegible(inc.actualizado_por_nombre, inc.actualizado_por_usuario, inc.actualizado_por)}</td>
+      <td>${escaparHtml(inc.descripcion || '—')}</td>
       <td><span class="badge ${abierta ? 'bg-danger' : 'bg-success'}">${abierta ? 'Abierta' : 'Cerrada'}</span></td>
       <td>${inc.tiempo_solucion || '-'}</td>
-      <td class="text-nowrap">${formatDateTime(inc.creado_en)}</td>
-      <td class="text-nowrap">${formatDateTime(inc.actualizado_en)}</td>
+      <td>${autorLegible(inc.creado_por_usuario)}</td>
+      <td>${autorLegible(inc.actualizado_por_usuario)}</td>
+      <td>${celdaFecha(inc.creado_en)}</td>
+      <td>${celdaFecha(inc.actualizado_en)}</td>
       <td class="text-nowrap">
+      <div class="d-inline-flex flex-nowrap gap-1">
         <button class="btn btn-sm btn-outline-primary" onclick="verIncidencia(${inc.id})" title="Ver detalle" aria-label="Ver detalle">
           <i class="bi bi-eye"></i>
         </button>
@@ -281,19 +283,24 @@ function renderTabla(incidencias) {
         ${hasPermission(PERMISOS.INCIDENCIAS.ELIMINAR) ? `<button class="btn btn-sm btn-danger ms-1" onclick="eliminarIncidencia(${inc.id})" title="Eliminar">
           <i class="bi bi-trash"></i>
         </button>` : ''}
+        </div>
       </td>
     `;
     tbody.appendChild(tr);
   });
 }
 
+function celdaFecha(valor) {
+  const texto = formatearFechaHora(valor).replace(',', '');
+  return `<span style="color: #4caf50; font-weight: 350; font-size: 0.85xem;">${escaparHtml(texto)}</span>`;
+}
 /**
  * Nombre legible del autor de auditoría, con degradación en cascada:
  * nombre completo -> usuario -> id crudo.
  */
-function autorLegible(nombre, usuario, id) {
-  const texto = [nombre, usuario].filter(Boolean).join(' · ') || (id ?? '-');
-  return escaparHtml(texto);
+function autorLegible(usuario) {
+  if (!usuario) return '<span class="text-muted">—</span>';
+  return escaparHtml(usuario);
 }
 
 /** Pinta el paginador a partir de { page, totalPages }. */
@@ -434,10 +441,10 @@ window.verIncidencia = async function (id) {
   // Auditoría: las dos columnas reales del schema. `responsable` es el dato de
   // negocio (quién atiende), no el usuario del sistema que registró la fila.
   document.getElementById('detalleAuditoria').innerHTML = [
-    ['Registrado por', autorLegible(inc.creado_por_nombre, inc.creado_por_usuario, inc.creado_por)],
-    ['Última edición por', autorLegible(inc.actualizado_por_nombre, inc.actualizado_por_usuario, inc.actualizado_por)],
-    ['Alta', formatDateTime(inc.creado_en)],
-    ['Última modificación', formatDateTime(inc.actualizado_en)],
+    ['Registrado por', autorLegible(inc.creado_por_usuario)],
+    ['Modificado por', autorLegible(inc.actualizado_por_usuario)],
+    ['Registrado en', celdaFecha(inc.creado_en)],
+    ['Modificado en', celdaFecha(inc.actualizado_en)],
   ].map(([k, v]) => `
       <div class="col-md-3">
         <div class="text-muted small text-uppercase">${k}</div>
@@ -542,13 +549,6 @@ document.getElementById('btnGuardarEditarIncidencia').addEventListener('click', 
   }
 });
 // ---------- helpers ----------
-
-function formatDateTime(dateStr) {
-  if (!dateStr) return '-';
-  const d = new Date(dateStr);
-  if (Number.isNaN(d.getTime())) return dateStr;
-  return d.toLocaleString('es-ES');
-}
 
 function normalizarHora(valor) {
   if (!valor) return '';

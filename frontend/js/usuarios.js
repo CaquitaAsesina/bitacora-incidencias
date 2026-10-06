@@ -121,7 +121,7 @@ async function cargarUsuarios() {
 function aplicarUsuarios(res) {
   if (!res.ok) {
     document.getElementById('tablaUsuariosBody').innerHTML =
-      '<tr><td colspan="12" class="text-center text-danger py-4">No se pudo cargar el listado de usuarios.</td></tr>';
+      '<tr><td colspan="14" class="text-center text-danger py-4">No se pudo cargar el listado de usuarios.</td></tr>';
     return;
   }
 
@@ -135,12 +135,16 @@ function aplicarUsuarios(res) {
 }
 
 /** Nombre legible del autor de auditoría, con su usuario como respaldo. */
-function autorLegible(usuario, nombre, fecha) {
-  const etiqueta = nombre || usuario;
-  const detalle = etiqueta ? `<div>${escaparHtml(etiqueta)}</div>` : '<span class="text-muted">—</span>';
-  const sufijo = usuario && usuario !== etiqueta ? `<small class="text-muted">@${escaparHtml(usuario)}</small>` : '';
-  const fechaHtml = fecha ? `<small class="text-muted">${escaparHtml(formatearFechaHora(fecha))}</small>` : '';
-  return `${detalle}${sufijo}${fechaHtml}`;
+/** Nombre legible del autor de auditoría, con el usuario como respaldo. */
+function autorLegible(usuario) {
+  if (!usuario) return '<span class="text-muted">—</span>';
+  return escaparHtml(usuario);
+}
+
+/** Celda de fecha de auditoría: formatearFechaHora ya devuelve '—' si no hay. */
+function celdaFecha(valor) {
+  const texto = formatearFechaHora(valor).replace(',', '');
+  return `<span style="color: #4caf50; font-weight: 350; font-size: 0.85xem;">${escaparHtml(texto)}</span>`;
 }
 
 /** Pinta la tabla de usuarios. */
@@ -153,7 +157,7 @@ function renderTablaUsuarios() {
 
   if (usuariosData.length === 0) {
     tbody.innerHTML =
-      '<tr><td colspan="12" class="text-center text-muted py-4">No hay usuarios que coincidan con los filtros.</td></tr>';
+      '<tr><td colspan="14" class="text-center text-muted py-4">No hay usuarios que coincidan con los filtros.</td></tr>';
     return;
   }
 
@@ -166,11 +170,11 @@ function renderTablaUsuarios() {
       roles.length === 0
         ? '<span class="text-muted">Sin roles</span>'
         : roles
-            .map(
-              (r) =>
-                `<span class="badge ${r.tipo === 'SISTEMA' ? 'bg-danger' : 'bg-info'}" title="${escaparHtml(r.tipo)}">${escaparHtml(r.nombre)}</span>`
-            )
-            .join(' ');
+          .map(
+            (r) =>
+              `<span class="badge ${r.tipo === 'SISTEMA' ? 'bg-danger' : 'bg-info'}" title="${escaparHtml(r.tipo)}">${escaparHtml(r.nombre)}</span>`
+          )
+          .join(' ');
 
     const tr = document.createElement('tr');
     tr.innerHTML = `
@@ -182,16 +186,16 @@ function renderTablaUsuarios() {
       <td>${escaparHtml(usuario.telefono || '—')}</td>
       <td>${usuario.habilitado ? '<span class="badge bg-success">Sí</span>' : '<span class="badge bg-secondary">No</span>'}</td>
       <td>${rolesHtml}</td>
-      <td>
-        <span class="badge bg-light text-dark" title="Incidencias registradas por este usuario">${usuario.incidencias_creadas ?? 0}</span>
-        <span class="badge bg-light text-dark" title="Incidencias modificadas por este usuario">${usuario.incidencias_actualizadas ?? 0}</span>
-      </td>
-      <td>${autorLegible(usuario.creado_por_usuario, usuario.creado_por_nombre, usuario.creado_en)}</td>
-      <td>${autorLegible(usuario.actualizado_por_usuario, usuario.actualizado_por_nombre, usuario.actualizado_en)}</td>
-      <td>
-        ${puedeEditar ? `<button class="btn btn-sm btn-warning ms-1" onclick="editarUsuario(${usuario.id})" title="Modificar" aria-label="Modificar usuario ${escaparHtml(usuario.usuario)}"><i class="bi bi-pencil"></i></button>` : ''}
-        ${puedeEliminar ? `<button class="btn btn-sm btn-danger ms-1" onclick="eliminarUsuario(${usuario.id})" title="Eliminar" aria-label="Eliminar usuario ${escaparHtml(usuario.usuario)}"><i class="bi bi-trash"></i></button>` : ''}
-      </td>
+      <td>${autorLegible(usuario.creado_por_usuario)}</td>
+      <td>${autorLegible(usuario.actualizado_por_usuario)}</td>
+      <td>${celdaFecha(usuario.creado_en)}</td>
+      <td>${celdaFecha(usuario.actualizado_en)}</td>
+      <td class="text-nowrap">
+  <div class="d-inline-flex flex-nowrap gap-1">
+    ${puedeEditar ? `<button class="btn btn-sm btn-warning" onclick="editarUsuario(${usuario.id})" title="Modificar" aria-label="Modificar usuario ${escaparHtml(usuario.usuario)}"><i class="bi bi-pencil"></i></button>` : ''}
+    ${puedeEliminar ? `<button class="btn btn-sm btn-danger" onclick="eliminarUsuario(${usuario.id})" title="Eliminar" aria-label="Eliminar usuario ${escaparHtml(usuario.usuario)}"><i class="bi bi-trash"></i></button>` : ''}
+  </div>
+</td>
     `;
     tbody.appendChild(tr);
   });

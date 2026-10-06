@@ -71,7 +71,9 @@ const asignarPermisosValidation = [
 ];
 
 // Orden de la cadena: sesión -> permiso -> id -> body -> validación -> controller.
-router.get('/', requireAuth, requirePermission('VER_ROLES'), listar);
+// ASIGNAR_ROLES tambien necesita el catalogo: sin el no hay de donde elegir el
+// rol que se va a asignar. Mismo criterio que '/:id/usuarios' más abajo.
+router.get('/', requireAuth, requirePermission('VER_ROLES', 'ASIGNAR_ROLES'), listar);
 
 router.post(
   '/',

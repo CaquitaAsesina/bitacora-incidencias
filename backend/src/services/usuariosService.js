@@ -231,6 +231,23 @@ export async function listarUsuarios(filtros = {}) {
 }
 
 /**
+ * Lista mínima de usuarios para el desplegable de "asignar rol a usuario".
+ *
+ * El listado completo (listarUsuarios) exige VER_USUARIOS y devuelve email,
+ * teléfono, roles, conteos y auditoría, pero el <select> del modal solo
+ * necesita identidad. Así una cuenta con ASIGNAR_ROLES —sin VER_USUARIOS—
+ * puede asignar roles sin que haya que exponerle todo el directorio.
+ *
+ * @returns {Promise<{id: number, usuario: string, nombre: string, apellido: string}[]>}
+ */
+export async function listarUsuariosParaAsignar() {
+  const [rows] = await pool.query(
+    'SELECT id, usuario, nombre, apellido FROM usuarios ORDER BY usuario'
+  );
+  return rows;
+}
+
+/**
  * @param {number|string} id
  * @returns {Promise<object|null>} el usuario completo (sin contraseña) o null.
  */
@@ -678,6 +695,7 @@ function error409(mensaje) {
 
 export default {
   listarUsuarios,
+  listarUsuariosParaAsignar,
   obtenerUsuarioPorId,
   crearUsuario,
   actualizarUsuario,

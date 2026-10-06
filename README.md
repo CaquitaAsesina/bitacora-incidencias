@@ -374,6 +374,7 @@ activa y el permiso listado (`requirePermission`).
 | Método | Ruta                                | Permiso                                               | Descripción                                                                                                |
 | ------ | ----------------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | GET    | `/`                                 | `VER_USUARIOS`                                        | Lista usuarios con roles, conteos de incidencias y auditoría. Acepta `q`, `rol`, `estado`, `orden`, `asc`. |
+| GET    | `/lista`                            | `ASIGNAR_ROLES`                                       | Identidad mínima (id, usuario, nombre, apellido) para el desplegable de asignación de rol.                  |
 | GET    | `/:id`                              | `VER_USUARIOS`                                        | Detalle del usuario con roles, conteos y auditoría.                                                        |
 | POST   | `/`                                 | `CREAR_USUARIOS`                                      | Crea usuario (contraseña ≥ 6, bcrypt).                                                                     |
 | PATCH  | `/:id`                              | `MODIFICAR_USUARIOS`                                  | Actualiza campos y, opcionalmente, la contraseña.                                                          |
@@ -392,7 +393,7 @@ activa y el permiso listado (`requirePermission`).
 
 | Método | Ruta                 | Permiso                          | Descripción                                                                                                                      |
 | ------ | -------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| GET    | `/`                  | `VER_ROLES`                      | Lista roles.                                                                                                                     |
+| GET    | `/`                  | `VER_ROLES` o `ASIGNAR_ROLES`   | Lista roles. Quien solo asigna roles la necesita para elegir a cuál asignar.                                                     |
 | POST   | `/`                  | `CREAR_ROLES`                    | Crea rol (SISTEMA o PERSONALIZADO).                                                                                              |
 | PATCH  | `/:id`               | `MODIFICAR_ROLES`                | Edita nombre/tipo (solo los campos enviados); al cambiar de tipo limpia la tabla de la lógica anterior, en la misma transacción. |
 | DELETE | `/:id`               | `ELIMINAR_ROLES`                 | Elimina rol.                                                                                                                     |
@@ -519,6 +520,10 @@ viajes** y **paralelizar lo independiente**:
 - Listado de incidencias (filas + total + resumen por estado), listado de
   usuarios (usuarios + roles), serie y estadísticas de tiempos, login y
   `/auth/me` ejecutan sus consultas **en paralelo** con `Promise.all`.
+- `GET /api/usuarios/lista` existe para el desplegable de "asignar rol a
+  usuario": devuelve solo `id`, `usuario`, `nombre` y `apellido`, así una
+  cuenta con `ASIGNAR_ROLES` —sin `VER_USUARIOS`— puede asignar roles sin
+  poder leer el directorio completo.
 - `GET /api/usuarios` resuelve en **una sola ida** al pool: los roles de todos
   los usuarios llegan agrupados por `usuario_id` y se reensamblan en memoria, en
   lugar de una consulta por usuario (N+1).

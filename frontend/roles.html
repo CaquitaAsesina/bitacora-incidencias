@@ -111,7 +111,7 @@
                     </div>
                     <div class="card-body">
                         <div class="row g-3">
-                             <div class="col-md-2">
+                            <div class="col-md-2">
                                 <label class="form-label form-label-sm">Desde</label>
                                 <input type="date" class="form-control form-control-sm" id="filtroDesde">
                             </div>
@@ -141,21 +141,26 @@
                 </div>
 
                 <div class="card">
+                    <div class="card-header bg-light d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <span><i class="bi bi-shield-lock"></i> <strong>Roles</strong></span>
+                        <span class="text-muted small" id="contadorRoles"></span>
+                    </div>
                     <div class="card-body">
                         <div class="table-responsive">
                             <table class="table table-hover">
                                 <thead class="bg-danger text-white">
                                     <tr>
                                         <th>ID</th>
-                                        <th>Nombre</th>
-                                        <th>Tipo</th>
+                                        <th>Nombreㅤㅤㅤㅤㅤ</th>
+                                        <th>Tipoㅤㅤㅤㅤ</th>
                                         <th class="text-center">Usuarios</th>
-                                        <th class="text-center" title="Permisos en la plantilla del rol (Lógica A)">Permisos</th>
-                                        <th>Creado por</th>
-                                        <th>Modificado por</th>
-                                        <th>Creado en</th>
-                                        <th>Modificado en</th>
-                                        <th>Acciones</th>
+                                        <th class="text-center" title="Permisos en la plantilla del rol (Lógica A)">
+                                            Permisos</th>
+                                        <th class="no-recorta">Registrado por</th>
+                                        <th class="no-recorta">Modificado por</th>
+                                        <th class="no-recorta">Registrado enㅤㅤ</th>
+                                        <th class="no-recorta">Modificado enㅤㅤ</th>
+                                        <th>Accionesㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤ</th>
                                     </tr>
                                 </thead>
                                 <tbody id="tablaRolesBody"></tbody>

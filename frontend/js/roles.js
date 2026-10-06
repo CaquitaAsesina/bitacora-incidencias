@@ -63,10 +63,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   await cargarRoles();
 
-  // El listado de usuarios solo hace falta para el modal de asignación.
+  // Solo hace falta para el desplegable del modal de asignación. Usa
+  // /usuarios/lista (ASIGNAR_ROLES) y no /usuarios (VER_USUARIOS): quien
+  // asigna roles no tiene por qué poder ver el directorio completo.
   if (hasPermission(PERMISOS.USUARIOS.ASIGNAR_ROLES)) {
-    const res = await apiRequest('/usuarios');
-    if (res.ok) usuariosData = res.data;
+    const res = await apiRequest('/usuarios/lista');
+    if (res.ok) {
+      usuariosData = res.data;
+    } else {
+      showToast(res.mensaje || 'No se pudo cargar el listado de usuarios', 'error');
+    }
   }
 });
 
@@ -76,7 +82,7 @@ async function cargarRoles() {
 
   if (!res.ok) {
     document.getElementById('tablaRolesBody').innerHTML =
-      '<tr><td colspan="8" class="text-center text-danger py-4">No se pudo cargar el catálogo de roles.</td></tr>';
+      '<tr><td colspan="10" class="text-center text-danger py-4">No se pudo cargar el catálogo de roles.</td></tr>';
     return;
   }
 
@@ -94,11 +100,9 @@ function normalizarTexto(valor) {
 }
 
 /** Nombre legible del autor de auditoría, con el usuario como respaldo. */
-function autorLegible(usuario, nombre) {
-  const etiqueta = nombre || usuario;
-  if (!etiqueta) return '<span class="text-muted">—</span>';
-  const sufijo = usuario && usuario !== etiqueta ? `<small class="text-muted">@${escaparHtml(usuario)}</small>` : '';
-  return `<div>${escaparHtml(etiqueta)}</div>${sufijo}`;
+function autorLegible(usuario) {
+  if (!usuario) return '<span class="text-muted">—</span>';
+  return escaparHtml(usuario);
 }
 
 /** @returns {object[]} roles que cumplen los filtros de nombre y fecha. */
@@ -132,7 +136,7 @@ function renderTablaRoles() {
 
   if (filtrados.length === 0) {
     tbody.innerHTML =
-      '<tr><td colspan="8" class="text-center text-muted py-4">No hay roles que coincidan con los filtros.</td></tr>';
+      '<tr><td colspan="10" class="text-center text-muted py-4">No hay roles que coincidan con los filtros.</td></tr>';
     return;
   }
 
@@ -146,11 +150,10 @@ function renderTablaRoles() {
       <td>${rol.id}</td>
       <td>${escaparHtml(rol.nombre)}</td>
       <td>
-        <span class="badge ${esSistema ? 'bg-danger' : 'bg-info'}" title="${
-          esSistema
-            ? 'Lógica A: la plantilla de permisos del rol aplica a todos sus usuarios'
-            : 'Lógica B: cada usuario del rol puede tener permisos propios'
-        }">${escaparHtml(rol.tipo)}</span>
+        <span class="badge ${esSistema ? 'bg-danger' : 'bg-info'}" title="${esSistema
+        ? 'Lógica A: la plantilla de permisos del rol aplica a todos sus usuarios'
+        : 'Lógica B: cada usuario del rol puede tener permisos propios'
+      }">${escaparHtml(rol.tipo)}</span>
       </td>
       <td class="text-center">
         <span class="badge bg-light text-dark" title="Usuarios con este rol">${rol.total_usuarios ?? 0}</span>
@@ -158,20 +161,28 @@ function renderTablaRoles() {
       <td class="text-center">
         <span class="badge bg-light text-dark" title="Permisos en la plantilla (Lógica A)">${rol.total_permisos ?? 0}</span>
       </td>
-      <td>${autorLegible(rol.creado_por_usuario, rol.creado_por_nombre)}<small class="text-muted">${escaparHtml(formatearFechaHora(rol.creado_en))}</small></td>
-      <td>${autorLegible(rol.actualizado_por_usuario, rol.actualizado_por_nombre)}<small class="text-muted">${escaparHtml(formatearFechaHora(rol.actualizado_en))}</small></td>
-      <td>
+      <td>${autorLegible(rol.creado_por_usuario)}</td>
+      <td>${autorLegible(rol.actualizado_por_usuario)}</td>
+      <td>${celdaFecha(rol.creado_en)}</td>
+      <td>${celdaFecha(rol.actualizado_en)}</td>
+
+      <td class="text-nowrap>
+      <div class="d-inline-flex flex-nowrap gap-1">
         <button class="btn btn-sm btn-outline-secondary" onclick="verUsuariosDeRol(${rol.id})" title="Ver usuarios con este rol" aria-label="Ver usuarios del rol ${escaparHtml(rol.nombre)}">
           <i class="bi bi-people"></i>
         </button>
         ${puedeEditar ? `<button class="btn btn-sm btn-warning ms-1" onclick="editarRol(${rol.id})" title="Modificar" aria-label="Modificar rol ${escaparHtml(rol.nombre)}"><i class="bi bi-pencil"></i></button>` : ''}
         ${puedeEliminar ? `<button class="btn btn-sm btn-danger ms-1" onclick="eliminarRol(${rol.id})" title="Eliminar" aria-label="Eliminar rol ${escaparHtml(rol.nombre)}"><i class="bi bi-trash"></i></button>` : ''}
+          </div>
       </td>
     `;
     tbody.appendChild(tr);
   });
 }
-
+function celdaFecha(valor) {
+  const texto = formatearFechaHora(valor).replace(',', '');
+  return `<span style="color: #4caf50; font-weight: 350; font-size: 0.85xem;">${escaparHtml(texto)}</span>`;
+}
 window.verUsuariosDeRol = async function (id) {
   const rol = rolesData.find((r) => r.id === id);
   if (!rol) return;

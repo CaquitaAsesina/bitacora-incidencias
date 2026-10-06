@@ -27,6 +27,16 @@ export async function listar(req, res, next) {
   }
 }
 
+/** GET /api/usuarios/lista — identidad mínima para asignar roles (ASIGNAR_ROLES). */
+export async function listarParaAsignar(req, res, next) {
+  try {
+    const usuarios = await usuariosService.listarUsuariosParaAsignar();
+    res.json({ ok: true, data: usuarios });
+  } catch (error) {
+    next(error);
+  }
+}
+
 /** GET /api/usuarios/:id — detalle de un usuario. */
 export async function obtenerPorId(req, res, next) {
   try {

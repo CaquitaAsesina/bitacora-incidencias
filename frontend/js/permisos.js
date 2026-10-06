@@ -31,13 +31,13 @@ const modalAsignarPermisosUsuario = new bootstrap.Modal(document.getElementById(
 
 document.addEventListener('DOMContentLoaded', async () => {
   await checkAuth();
-  
+
   if (hasPermission('CREAR_PERMISOS')) {
     document.getElementById('btnNuevoPermiso').style.display = 'inline-block';
     document.getElementById('btnNuevoPermiso').addEventListener('click', abrirModalNuevoPermiso);
     document.getElementById('btnGuardarPermiso').addEventListener('click', guardarPermiso);
   }
-  
+
   if (hasPermission(PERMISOS.USUARIOS.ASIGNAR_PERMISOS)) {
     document.getElementById('btnAsignarPermisosRol').style.display = 'inline-block';
     document.getElementById('btnAsignarPermisosUsuario').style.display = 'inline-block';
@@ -46,7 +46,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('btnGuardarAsignacionRol').addEventListener('click', guardarAsignacionPermisosRol);
     document.getElementById('btnGuardarAsignacionUsuario').addEventListener('click', guardarAsignacionPermisosUsuario);
   }
-  
+
   document.getElementById('btnFiltrar').addEventListener('click', () => {
     filtroNombreActual = document.getElementById('filtroNombre').value;
     renderTablaPermisos();
@@ -138,23 +138,29 @@ function renderTablaPermisos() {
         <span class="badge bg-success" title="Usuarios con el permiso concedido (Lógica B)">${p.usuarios_concedidos ?? 0}</span>
         <span class="badge bg-secondary" title="Usuarios con el permiso denegado explícitamente (Lógica B)">${p.usuarios_denegados ?? 0}</span>
       </td>
-      <td>${autorLegible(p.creado_por_usuario, p.creado_por_nombre)}<small class="text-muted">${escaparHtml(formatearFechaHora(p.creado_en))}</small></td>
-      <td>${autorLegible(p.actualizado_por_usuario, p.actualizado_por_nombre)}<small class="text-muted">${escaparHtml(formatearFechaHora(p.actualizado_en))}</small></td>
-      <td>
-        ${puedeModificar ? `<button class="btn btn-sm btn-warning ms-1" onclick="editarPermiso(${p.id})" title="Modificar" aria-label="Modificar ${escaparHtml(p.nombre)}"><i class="bi bi-pencil"></i></button>` : ''}
+      <td>${autorLegible(p.creado_por_usuario)}</td>
+      <td>${autorLegible(p.actualizado_por_usuario)}</td>
+      <td>${celdaFecha(p.creado_en)}</td>
+      <td>${celdaFecha(p.actualizado_en)}</td>
+      <td class="text-nowrap">
+      <div class="d-inline-flex flex-nowrap gap-1">
+      ${puedeModificar ? `<button class="btn btn-sm btn-warning ms-1" onclick="editarPermiso(${p.id})" title="Modificar" aria-label="Modificar ${escaparHtml(p.nombre)}"><i class="bi bi-pencil"></i></button>` : ''}
         ${puedeEliminar ? `<button class="btn btn-sm btn-danger ms-1" onclick="eliminarPermiso(${p.id})" title="Eliminar" aria-label="Eliminar ${escaparHtml(p.nombre)}"><i class="bi bi-trash"></i></button>` : ''}
-      </td>
+        </div>
+        </td>
     `;
     tbody.appendChild(tr);
   });
 }
+function celdaFecha(valor) {
+  const texto = formatearFechaHora(valor).replace(',', '');
+  return `<span style="color: #4caf50; font-weight: 350; font-size: 0.85xem;">${escaparHtml(texto)}</span>`;
+}
 
 /** Nombre legible del autor de auditoría, con el usuario como respaldo. */
-function autorLegible(usuario, nombre) {
-  const etiqueta = nombre || usuario;
-  if (!etiqueta) return '<span class="text-muted">—</span>';
-  const sufijo = usuario && usuario !== etiqueta ? `<small class="text-muted">@${escaparHtml(usuario)}</small>` : '';
-  return `<div>${escaparHtml(etiqueta)}</div>${sufijo}`;
+function autorLegible(usuario) {
+  if (!usuario) return '<span class="text-muted">—</span>';
+  return escaparHtml(usuario);
 }
 
 /** Abre el modal en modo "nuevo permiso". */

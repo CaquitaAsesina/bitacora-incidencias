@@ -72,7 +72,9 @@ function buildSidebar() {
   }
 
   // Usuarios
-  if (hasPermission(PERMISOS.USUARIOS.VER, PERMISOS.USUARIOS.CREAR, PERMISOS.USUARIOS.MODIFICAR, PERMISOS.USUARIOS.ELIMINAR, PERMISOS.USUARIOS.ASIGNAR_ROLES, PERMISOS.USUARIOS.ASIGNAR_PERMISOS)) {
+  // Sin ASIGNAR_ROLES: usuarios.html carga GET /usuarios, que exige VER_USUARIOS.
+  // Quien solo puede asignar roles usa roles.html, donde vive ese boton.
+  if (hasPermission(PERMISOS.USUARIOS.VER, PERMISOS.USUARIOS.CREAR, PERMISOS.USUARIOS.MODIFICAR, PERMISOS.USUARIOS.ELIMINAR, PERMISOS.USUARIOS.ASIGNAR_PERMISOS)) {
     menuItems.push({
       href: 'usuarios.html',
       icon: 'bi-people',
@@ -81,7 +83,7 @@ function buildSidebar() {
   }
 
   // Roles
-  if (hasPermission(PERMISOS.ROLES.VER, PERMISOS.ROLES.CREAR, PERMISOS.ROLES.MODIFICAR, PERMISOS.ROLES.ELIMINAR)) {
+  if (hasPermission(PERMISOS.ROLES.VER, PERMISOS.ROLES.CREAR, PERMISOS.ROLES.MODIFICAR, PERMISOS.ROLES.ELIMINAR, PERMISOS.USUARIOS.ASIGNAR_ROLES)) {
     menuItems.push({
       href: 'roles.html',
       icon: 'bi-person-badge',

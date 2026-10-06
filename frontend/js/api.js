@@ -32,8 +32,10 @@ function paginaInicio(permisos = []) {
   const tiene = (...perms) => perms.some((p) => permisos.includes(p));
   if (tiene('VER_DASHBOARD')) return 'dashboard.html';
   if (tiene('VER_INCIDENCIAS', 'CREAR_INCIDENCIAS', 'MODIFICAR_INCIDENCIAS', 'ELIMINAR_INCIDENCIAS')) return 'incidencias.html';
-  if (tiene('VER_USUARIOS', 'CREAR_USUARIOS', 'MODIFICAR_USUARIOS', 'ELIMINAR_USUARIOS', 'ASIGNAR_ROLES', 'ASIGNAR_PERMISOS')) return 'usuarios.html';
+  // ASIGNAR_ROLES vive en roles.html, asi que se comprueba antes que usuarios.html:
+  // el boton 'asignar rol a usuario' esta ahi y usuarios.html exige VER_USUARIOS.
   if (tiene('VER_ROLES', 'CREAR_ROLES', 'MODIFICAR_ROLES', 'ELIMINAR_ROLES', 'ASIGNAR_ROLES')) return 'roles.html';
+  if (tiene('VER_USUARIOS', 'CREAR_USUARIOS', 'MODIFICAR_USUARIOS', 'ELIMINAR_USUARIOS', 'ASIGNAR_PERMISOS')) return 'usuarios.html';
   if (tiene('VER_PERMISOS', 'CREAR_PERMISOS', 'MODIFICAR_PERMISOS', 'ELIMINAR_PERMISOS', 'ASIGNAR_PERMISOS')) return 'permisos.html';
   return null;
 }

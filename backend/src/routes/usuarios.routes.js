@@ -26,6 +26,7 @@ import {
 } from '../middlewares/validacion.js';
 import {
   listar,
+  listarParaAsignar,
   obtenerPorId,
   crear,
   actualizar,
@@ -105,6 +106,15 @@ const usuarioActualizarValidation = [
 // checkValidation DEBE ir después de los validadores del body; idNumerico
 // valida que el :id sea un entero antes de tocar la base de datos.
 router.get('/', requireAuth, requirePermission('VER_USUARIOS'), listar);
+
+// Mínimo privilegio: el desplegable de "asignar rol a usuario" solo necesita
+// identidad. Se declara ANTES de '/:id' para que Express no lo capture como id.
+router.get(
+  '/lista',
+  requireAuth,
+  requirePermission('ASIGNAR_ROLES'),
+  listarParaAsignar
+);
 
 // Detalle con el mismo contrato que el listado (roles, conteos y auditoría).
 // Va antes que '/:id/roles' por claridad, aunque Express ya distingue los
