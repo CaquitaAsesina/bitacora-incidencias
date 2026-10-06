@@ -82,10 +82,9 @@ backend/                      # API + servidor de estáticos
   .env.example                # plantilla de variables de entorno (sí se versiona)
   .env                        # credenciales locales de verdad (NO se versiona)
   schema.sql                  # esquema + datos iniciales (roles, permisos, admin)
-  render.yml                  # Blueprint de despliegue en Render
   src/
     server.js                 # entrada: Express, sesión, estáticos, /api y fallback SPA
-    config/db.js              # pool de conexiones MySQL compartido
+    config/db.js              # pool de conexiones MySQL compartido + opciones TLS
     middlewares/
       auth.js                 # requireAuth + requirePermission
       errorHandler.js         # manejo central de errores
@@ -300,10 +299,11 @@ conexión se queda muda y expira). El mismo problema aparece con el cliente
 oficial `mysql`, así que no es un defecto de mysql2. Para que Aiven lo procese
 bien, el paquete debe viajar en dos segmentos.
 
-`backend/src/config/mysqlSSL.js` combina ambas cosas:
+`backend/src/config/db.js` combina ambas cosas (en la primera sección del
+archivo):
 
-- carga la CA del proyecto (`certs/ca.pem`) y arma las opciones TLS que se
-  pasan al pool (`ssl: { ca, rejectUnauthorized: true, verifyIdentity: true }`);
+- calcula las opciones TLS a partir de las variables de entorno y las pasa al
+  pool (`ssl: { ca, rejectUnauthorized: true, verifyIdentity: true }`);
 - parchea mysql2 para que el SSL Request se envíe en dos `write()` (cabecera
   + payload), dejando intacto el orden del ClientHello y el resto de paquetes.
 
@@ -573,13 +573,15 @@ viajes** y **paralelizar lo independiente**:
   renders simultáneos dejan un canvas en uso y Chart.js lanza error—;
   incidencias (sugerencias + listado) y usuarios (catálogos + listado) también,
   y cada página hace **una sola** llamada a `/api/auth/me` por carga.
-- El despliegue en Render se configura en **Fráncfort** (`render.yml`) para
-  quedar junto a la base y eliminar la mayor parte de la latencia de red.
+- El despliegue en Render se configura en **Fráncfort** (`render.yml`, en la
+  raíz del repositorio) para quedar junto a la base y eliminar la mayor parte
+  de la latencia de red.
 
 ## 13. Despliegue en Render
 
-El Blueprint está en `backend/render.yml`. En Render: **New → Blueprint**,
-apuntar al repositorio e indicar `backend/render.yml` como _Blueprint file path_.
+El Blueprint está en **`render.yml`, en la raíz del repositorio** (Render lo
+detecta automáticamente con ese nombre). En Render: **New → Blueprint** y
+apuntar al repositorio.
 
 Configuración del servicio:
 
@@ -592,7 +594,12 @@ La base de datos es un MySQL externo (Render no ofrece MySQL). Las credenciales
 se configuran **como variables de entorno del servicio** en el dashboard y
 nunca en el YAML ni en el repositorio (`render.yml` las declara con
 `sync: false`, así Render las pide): `DB_HOST`, `DB_PORT`, `DB_USER`,
-`DB_PASSWORD`, `SESSION_SECRET`; `DB_NAME` y `NODE_ENV=production` van fijos.
+`DB_PASSWORD`, `SESSION_SECRET`; `DB_NAME`, `NODE_ENV=production`,
+`DB_SSL=REQUIRED` y `DB_SSL_CA=certs/ca.pem` van fijos en el Blueprint
+(`REQUIRED` activa la conexión TLS que Aiven exige y puede sobreescribirse
+en el dashboard con `false`/`0` para un MySQL local sin cifrado).
+`backend/certs/ca.pem` (CA del proyecto Aiven) está versionado y es
+indispensable: sin él el backend no puede validar la cadena TLS.
 
 > El plan free de Render suspende la instancia tras unos minutos de inactividad:
 > la primera petición después de eso tarda unos segundos (cold start).

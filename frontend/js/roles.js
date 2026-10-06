@@ -131,9 +131,6 @@ function renderTablaRoles() {
   const tbody = document.getElementById('tablaRolesBody');
   tbody.innerHTML = '';
 
-  document.getElementById('contadorRoles').textContent =
-    `${filtrados.length} de ${rolesData.length} rol(es).`;
-
   if (filtrados.length === 0) {
     tbody.innerHTML =
       '<tr><td colspan="10" class="text-center text-muted py-4">No hay roles que coincidan con los filtros.</td></tr>';

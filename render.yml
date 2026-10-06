@@ -2,8 +2,8 @@
 # render.yml — Blueprint de despliegue en Render
 # =====================================================================
 # Uso: en Render, crear un Blueprint (New + > Blueprint) apuntando a este
-# repositorio y establecer "Blueprint file path" = backend/render.yml
-# (Render permite rutas y nombres personalizados desde febrero de 2026).
+# repositorio y usar el render.yml de la raíz (Render lo detecta solo en
+# el *root* con el nombre render.yaml o render.yml).
 #
 # El frontend se sirve desde la carpeta /frontend por el propio Express,
 # por eso el build y el start se ejecutan desde la raíz del repo con
@@ -40,7 +40,10 @@ services:
         sync: false
       - key: SESSION_SECRET
         sync: false
+      # REQUIRED = TLS activo (Aiven lo exige). En el dashboard puede
+      # sobreescribirse con false/0 para un MySQL local sin cifrado.
       - key: DB_SSL
-        sync: false
+        value: REQUIRED
+      # Ruta de la CA, resuelta por db.js relativa a backend/.
       - key: DB_SSL_CA
         value: certs/ca.pem

@@ -152,9 +152,6 @@ function renderTablaUsuarios() {
   const tbody = document.getElementById('tablaUsuariosBody');
   tbody.innerHTML = '';
 
-  document.getElementById('contadorUsuarios').textContent =
-    `${usuariosData.length} usuario(s) con los filtros aplicados.`;
-
   if (usuariosData.length === 0) {
     tbody.innerHTML =
       '<tr><td colspan="13" class="text-center text-muted py-4">No hay usuarios que coincidan con los filtros.</td></tr>';

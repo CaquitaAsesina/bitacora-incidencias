@@ -2,8 +2,8 @@
 <!--
   usuarios.html — Gestión de usuarios (listado con filtros, alta/edición, borrado).
   Scripts (en orden): api.js -> ui.js -> layout.js -> usuarios.js.
-  Los ids funcionales (filtros, filtroOrden, tablaUsuariosBody, contadorUsuarios,
-  modalUsuario, formUsuario, botones de acción, userInfo, logoutBtn, sidebarNav,
+  Los ids funcionales (filtros, filtroOrden, tablaUsuariosBody, modalUsuario,
+  formUsuario, botones de acción, userInfo, logoutBtn, sidebarNav,
   toastContainer) se conservan sin cambios.
   La tabla muestra roles, conteos de incidencias y la auditoría (quién creó y
   quién modificó cada usuario).
@@ -175,7 +175,6 @@
                 <div class="card">
                     <div class="card-header bg-light d-flex flex-wrap justify-content-between align-items-center gap-2">
                         <span><i class="bi bi-people"></i> <strong>Usuarios</strong></span>
-                        <span class="text-muted small" id="contadorUsuarios"></span>
                     </div>
                     <div class="card-body">
                         <div class="table-responsive">
