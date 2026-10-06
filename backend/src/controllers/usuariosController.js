@@ -5,43 +5,66 @@
  * CRUD de usuarios y asignación de roles/permisos a cada usuario.
  * Delega toda la lógica en usuariosService.
  *
+ * La auditoría (`creado_por` / `actualizado_por`) se toma de req.session.userId
+ * y se pasa al servicio: el body nunca la decide.
+ *
  * Para extender: añade la función aquí y regístrala en routes/usuarios.routes.js.
  * =====================================================================
  */
 import usuariosService from '../services/usuariosService.js';
 
-/** GET /api/usuarios — lista usuarios (incluye sus roles). */
+/**
+ * GET /api/usuarios — lista usuarios con roles, auditoría y conteos.
+ * Acepta filtros de query: habilitado, creado_desde, creado_hasta, rol_id, q,
+ * orden (lista blanca resuelta en el servicio).
+ */
 export async function listar(req, res, next) {
   try {
-    const usuarios = await usuariosService.listarUsuarios();
+    const usuarios = await usuariosService.listarUsuarios(req.query);
     res.json({ ok: true, data: usuarios });
   } catch (error) {
     next(error);
   }
 }
 
-/** POST /api/usuarios — crea un usuario. */
-export async function crear(req, res, next) {
-  try {
-    const usuario = await usuariosService.crearUsuario(req.body);
-    res.status(201).json({ ok: true, data: usuario });
-  } catch (error) {
-    next(error);
-  }
-}
-
-/** PATCH /api/usuarios/:id — actualiza un usuario. */
-export async function actualizar(req, res, next) {
+/** GET /api/usuarios/:id — detalle de un usuario. */
+export async function obtenerPorId(req, res, next) {
   try {
     const { id } = req.params;
-    const usuario = await usuariosService.actualizarUsuario(id, req.body);
+    const usuario = await usuariosService.obtenerUsuarioPorId(id);
+
+    if (!usuario) {
+      return res.status(404).json({ ok: false, mensaje: 'Usuario no encontrado' });
+    }
+
     res.json({ ok: true, data: usuario });
   } catch (error) {
     next(error);
   }
 }
 
-/** DELETE /api/usuarios/:id — elimina un usuario. */
+/** POST /api/usuarios — crea un usuario (auditoría = usuario de la sesión). */
+export async function crear(req, res, next) {
+  try {
+    const usuario = await usuariosService.crearUsuario(req.body, req.session.userId);
+    res.status(201).json({ ok: true, data: usuario });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** PATCH /api/usuarios/:id — actualiza un usuario (refresca actualizado_por). */
+export async function actualizar(req, res, next) {
+  try {
+    const { id } = req.params;
+    const usuario = await usuariosService.actualizarUsuario(id, req.body, req.session.userId);
+    res.json({ ok: true, data: usuario });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** DELETE /api/usuarios/:id — elimina si no tiene incidencias vinculadas. */
 export async function eliminar(req, res, next) {
   try {
     const { id } = req.params;

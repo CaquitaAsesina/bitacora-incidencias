@@ -5,34 +5,54 @@
  * Listado con filtros, alta/modificación en modal y borrado.
  * Los botones de fila llaman funciones globales (window.*).
  * Los permisos que gobiernan los botones se consultan con hasPermission().
+ *
+ * ALINEADO CON EL BACKEND (usuariosService.js):
+ *   - Permisos plurales: CREAR_USUARIOS / MODIFICAR_USUARIOS /
+ *     ELIMINAR_USUARIOS. Antes todo pasaba por CREAR_USUARIO (singular), que
+ *     ya no existe en el catálogo, así que los botones nunca se mostraban.
+ *   - Cada fila trae roles, auditoría (creado_por / actualizado_por con su
+ *     nombre legible) e incidencias_creadas / incidencias_actualizadas.
+ *   - El listado ya filtra y ordena en el servidor; los filtros de texto se
+ *     envían como parámetro `q`, no se filtran en el navegador.
  * =====================================================================
  */
 let usuariosData = [];
 let rolesData = []; // catálogo de roles para el filtro por rol
+let ordenActual = 'alfabetico';
+
 const modalUsuario = new bootstrap.Modal(document.getElementById('modalUsuario'));
+let editingUsuarioId = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
-  await checkAuth();
+  const userData = await checkAuth();
+  if (!userData) return;
 
-  if (hasPermission('CREAR_USUARIO')) {
+  if (hasPermission(PERMISOS.USUARIOS.CREAR)) {
     document.getElementById('btnNuevoUsuario').style.display = 'inline-block';
     document.getElementById('btnNuevoUsuario').addEventListener('click', abrirModalNuevo);
   }
 
   document.getElementById('btnGuardarUsuario').addEventListener('click', guardarUsuario);
 
+  // Los filtros se aplican al pulsar "Aplicar" o al cambiar un desplegable;
+  // en los campos de texto se espera a dejar de escribir.
   const idsFiltro = ['filtroDesde', 'filtroHasta', 'filtroUsuario', 'filtroNombre', 'filtroEmail', 'filtroTelefono'];
   idsFiltro.forEach((id) => {
-    document.getElementById(id).addEventListener('input', renderTablaUsuarios);
+    document.getElementById(id).addEventListener('input', cargarUsuarios);
   });
-  document.getElementById('filtroRol').addEventListener('change', renderTablaUsuarios);
-  document.getElementById('filtroHabilitado').addEventListener('change', renderTablaUsuarios);
-  document.getElementById('btnFiltrarUsuarios').addEventListener('click', renderTablaUsuarios);
+  document.getElementById('filtroRol').addEventListener('change', cargarUsuarios);
+  document.getElementById('filtroHabilitado').addEventListener('change', cargarUsuarios);
+  document.getElementById('filtroOrden').addEventListener('change', (e) => {
+    ordenActual = e.target.value;
+    cargarUsuarios();
+  });
+  document.getElementById('btnFiltrarUsuarios').addEventListener('click', cargarUsuarios);
   document.getElementById('btnLimpiarFiltrosUsuarios').addEventListener('click', () => {
     idsFiltro.forEach((id) => (document.getElementById(id).value = ''));
     document.getElementById('filtroRol').value = '';
     document.getElementById('filtroHabilitado').value = '';
-    renderTablaUsuarios();
+    document.getElementById('filtroOrden').value = ordenActual;
+    cargarUsuarios();
   });
 
   await cargarDatos();
@@ -40,8 +60,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 /** Carga roles (para el filtro) y usuarios. Rendimiento: ambas en paralelo. */
 async function cargarDatos() {
+  // El catálogo de roles solo se necesita para el desplegable de filtro; si el
+  // usuario no puede ver roles, se salta sin romper la pantalla.
   const [rolesRes, usuariosRes] = await Promise.all([
-    apiRequest('/roles'),
+    hasPermission(PERMISOS.ROLES.VER) ? apiRequest('/roles') : Promise.resolve({ ok: false }),
     apiRequest('/usuarios'),
   ]);
 
@@ -50,8 +72,8 @@ async function cargarDatos() {
     const selectRol = document.getElementById('filtroRol');
     const seleccionActual = selectRol.value;
     selectRol.innerHTML = '<option value="">Todos los roles</option>';
-    rolesData.forEach(r => {
-      selectRol.innerHTML += `<option value="${r.id}">${r.nombre} (${r.tipo})</option>`;
+    rolesData.forEach((r) => {
+      selectRol.innerHTML += `<option value="${r.id}">${escaparHtml(r.nombre)} (${r.tipo})</option>`;
     });
     selectRol.value = seleccionActual;
   }
@@ -59,100 +81,116 @@ async function cargarDatos() {
   aplicarUsuarios(usuariosRes);
 }
 
-/** Carga y normaliza el listado de usuarios. */
+/**
+ * Query de filtros para /api/usuarios.
+ * Los campos de texto se unen en `q` (búsqueda parcial con LIKE en el
+ * servidor); el resto viaja como parámetro exacto.
+ * @returns {string} query string o ''
+ */
+function queryFiltrosUsuarios() {
+  const params = new URLSearchParams();
+
+  const textos = ['filtroUsuario', 'filtroNombre', 'filtroEmail', 'filtroTelefono']
+    .map((id) => document.getElementById(id)?.value.trim() || '')
+    .filter(Boolean);
+
+  if (textos.length > 0) params.set('q', textos.join(' '));
+  if (document.getElementById('filtroDesde')?.value) {
+    params.set('creado_desde', document.getElementById('filtroDesde').value);
+  }
+  if (document.getElementById('filtroHasta')?.value) {
+    params.set('creado_hasta', document.getElementById('filtroHasta').value);
+  }
+  if (document.getElementById('filtroRol')?.value) {
+    params.set('rol_id', document.getElementById('filtroRol').value);
+  }
+  if (document.getElementById('filtroHabilitado')?.value !== '') {
+    params.set('habilitado', document.getElementById('filtroHabilitado').value);
+  }
+  params.set('orden', ordenActual);
+
+  return `?${params.toString()}`;
+}
+
+/** Carga el listado aplicando los filtros del panel. */
 async function cargarUsuarios() {
-  aplicarUsuarios(await apiRequest('/usuarios'));
+  aplicarUsuarios(await apiRequest(`/usuarios${queryFiltrosUsuarios()}`));
 }
 
 /** Aplica la respuesta de /usuarios a la tabla (normaliza el array de roles). */
 function aplicarUsuarios(res) {
-  if (res.ok) {
-    // El endpoint ya incluye el array `roles` de cada usuario.
-    usuariosData = res.data.map(u => ({
-      ...u,
-      roles: Array.isArray(u.roles) ? u.roles : [],
-    }));
-    renderTablaUsuarios();
+  if (!res.ok) {
+    document.getElementById('tablaUsuariosBody').innerHTML =
+      '<tr><td colspan="12" class="text-center text-danger py-4">No se pudo cargar el listado de usuarios.</td></tr>';
+    return;
   }
+
+  // El endpoint ya incluye el array `roles` de cada usuario.
+  usuariosData = res.data.map((u) => ({
+    ...u,
+    roles: Array.isArray(u.roles) ? u.roles : [],
+  }));
+
+  renderTablaUsuarios();
 }
 
-function formatFechaHora(valor) {
-  if (!valor) return '-';
-  const d = new Date(valor);
-  if (Number.isNaN(d.getTime())) return '-';
-  return d.toLocaleDateString('es-ES');
+/** Nombre legible del autor de auditoría, con su usuario como respaldo. */
+function autorLegible(usuario, nombre, fecha) {
+  const etiqueta = nombre || usuario;
+  const detalle = etiqueta ? `<div>${escaparHtml(etiqueta)}</div>` : '<span class="text-muted">—</span>';
+  const sufijo = usuario && usuario !== etiqueta ? `<small class="text-muted">@${escaparHtml(usuario)}</small>` : '';
+  const fechaHtml = fecha ? `<small class="text-muted">${escaparHtml(formatearFechaHora(fecha))}</small>` : '';
+  return `${detalle}${sufijo}${fechaHtml}`;
 }
 
-/** Normaliza texto (minúsculas y sin acentos) para búsquedas. */
-function normalizar(valor) {
-  return (valor || '')
-    .toString()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
-}
-
-/** @returns {object[]} usuarios que cumplen los filtros activos. */
-function usuariosFiltrados() {
-  // Rango de fechas: coincide si la creación o la última modificación del
-  // usuario caen dentro de [desde, hasta].
-  const fDesde = document.getElementById('filtroDesde').value;
-  const fHasta = document.getElementById('filtroHasta').value;
-  const fUsuario = normalizar(document.getElementById('filtroUsuario').value.trim());
-  const fNombre = normalizar(document.getElementById('filtroNombre').value.trim());
-  const fEmail = normalizar(document.getElementById('filtroEmail').value.trim());
-  const fTelefono = normalizar(document.getElementById('filtroTelefono').value.trim());
-  const fRol = document.getElementById('filtroRol').value;
-  const fHabilitado = document.getElementById('filtroHabilitado').value;
-
-  return usuariosData.filter((u) => {
-    if (!fechaDentroDeRango(u.creado_en, fDesde, fHasta) && !fechaDentroDeRango(u.actualizado_en, fDesde, fHasta)) return false;
-    if (fUsuario && !normalizar(u.usuario).includes(fUsuario)) return false;
-    if (fNombre && !normalizar(`${u.nombre} ${u.apellido}`).includes(fNombre)) return false;
-    if (fEmail && !normalizar(u.email).includes(fEmail)) return false;
-    if (fTelefono && !normalizar(u.telefono).includes(fTelefono)) return false;
-    if (fRol && !(u.roles || []).some((r) => r.id === parseInt(fRol, 10))) return false;
-    if (fHabilitado !== '' && String(u.habilitado ? 1 : 0) !== fHabilitado) return false;
-    return true;
-  });
-}
-
-/** Pinta la tabla de usuarios aplicando los filtros. */
+/** Pinta la tabla de usuarios. */
 function renderTablaUsuarios() {
-  const filtrados = usuariosFiltrados();
   const tbody = document.getElementById('tablaUsuariosBody');
   tbody.innerHTML = '';
 
   document.getElementById('contadorUsuarios').textContent =
-    `Mostrando ${filtrados.length} de ${usuariosData.length} usuario(s).`;
+    `${usuariosData.length} usuario(s) con los filtros aplicados.`;
 
-  if (filtrados.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted py-4">No hay usuarios que coincidan con los filtros.</td></tr>';
+  if (usuariosData.length === 0) {
+    tbody.innerHTML =
+      '<tr><td colspan="12" class="text-center text-muted py-4">No hay usuarios que coincidan con los filtros.</td></tr>';
     return;
   }
 
-  filtrados.forEach((usuario) => {
+  const puedeEditar = hasPermission(PERMISOS.USUARIOS.MODIFICAR);
+  const puedeEliminar = hasPermission(PERMISOS.USUARIOS.ELIMINAR);
+
+  usuariosData.forEach((usuario) => {
     const roles = usuario.roles || [];
-    const rolesHtml = roles.length === 0
-      ? '<span class="text-muted">Sin roles</span>'
-      : roles.map(r => `
-          <span class="badge ${r.tipo === 'SISTEMA' ? 'bg-danger' : 'bg-info'}">${r.nombre}</span>`).join(' ');
+    const rolesHtml =
+      roles.length === 0
+        ? '<span class="text-muted">Sin roles</span>'
+        : roles
+            .map(
+              (r) =>
+                `<span class="badge ${r.tipo === 'SISTEMA' ? 'bg-danger' : 'bg-info'}" title="${escaparHtml(r.tipo)}">${escaparHtml(r.nombre)}</span>`
+            )
+            .join(' ');
 
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${usuario.id}</td>
-      <td>${usuario.usuario}</td>
-      <td>${usuario.nombre}</td>
-      <td>${usuario.apellido}</td>
-      <td>${usuario.email}</td>
-      <td>${usuario.telefono || '-'}</td>
-      <td>${usuario.habilitado ? '<span class="badge bg-success">Sí</span>' : '<span class="badge bg-danger">No</span>'}</td>
+      <td>${escaparHtml(usuario.usuario)}</td>
+      <td>${escaparHtml(usuario.nombre)}</td>
+      <td>${escaparHtml(usuario.apellido)}</td>
+      <td>${escaparHtml(usuario.email || '—')}</td>
+      <td>${escaparHtml(usuario.telefono || '—')}</td>
+      <td>${usuario.habilitado ? '<span class="badge bg-success">Sí</span>' : '<span class="badge bg-secondary">No</span>'}</td>
       <td>${rolesHtml}</td>
-      <td>${formatFechaHora(usuario.creado_en)}</td>
-      <td>${formatFechaHora(usuario.actualizado_en)}</td>
       <td>
-        ${hasPermission('CREAR_USUARIO') ? `<button class="btn btn-sm btn-warning ms-1" onclick="editarUsuario(${usuario.id})" title="Modificar" aria-label="Modificar"><i class="bi bi-pencil"></i></button>` : ''}
-        ${hasPermission('CREAR_USUARIO') ? `<button class="btn btn-sm btn-danger ms-1" onclick="eliminarUsuario(${usuario.id})" title="Eliminar" aria-label="Eliminar"><i class="bi bi-trash"></i></button>` : ''}
+        <span class="badge bg-light text-dark" title="Incidencias registradas por este usuario">${usuario.incidencias_creadas ?? 0}</span>
+        <span class="badge bg-light text-dark" title="Incidencias modificadas por este usuario">${usuario.incidencias_actualizadas ?? 0}</span>
+      </td>
+      <td>${autorLegible(usuario.creado_por_usuario, usuario.creado_por_nombre, usuario.creado_en)}</td>
+      <td>${autorLegible(usuario.actualizado_por_usuario, usuario.actualizado_por_nombre, usuario.actualizado_en)}</td>
+      <td>
+        ${puedeEditar ? `<button class="btn btn-sm btn-warning ms-1" onclick="editarUsuario(${usuario.id})" title="Modificar" aria-label="Modificar usuario ${escaparHtml(usuario.usuario)}"><i class="bi bi-pencil"></i></button>` : ''}
+        ${puedeEliminar ? `<button class="btn btn-sm btn-danger ms-1" onclick="eliminarUsuario(${usuario.id})" title="Eliminar" aria-label="Eliminar usuario ${escaparHtml(usuario.usuario)}"><i class="bi bi-trash"></i></button>` : ''}
       </td>
     `;
     tbody.appendChild(tr);
@@ -166,13 +204,12 @@ function abrirModalNuevo() {
   document.getElementById('formUsuario').reset();
   document.getElementById('passwordGroup').style.display = 'block';
   document.getElementById('contrasena').required = true;
+  document.getElementById('contrasena').value = '';
   modalUsuario.show();
 }
 
-let editingUsuarioId = null;
-
-window.editarUsuario = function(id) {
-  const usuario = usuariosData.find(u => u.id === id);
+window.editarUsuario = function (id) {
+  const usuario = usuariosData.find((u) => u.id === id);
   if (!usuario) return;
   editingUsuarioId = id;
   document.getElementById('modalUsuarioTitle').textContent = 'Modificar Usuario';
@@ -182,6 +219,7 @@ window.editarUsuario = function(id) {
   document.getElementById('email').value = usuario.email;
   document.getElementById('telefono').value = usuario.telefono || '';
   document.getElementById('habilitado').value = usuario.habilitado ? 'true' : 'false';
+  // En edición la contraseña es opcional: si el campo queda vacío no se envía.
   document.getElementById('passwordGroup').style.display = 'none';
   document.getElementById('contrasena').required = false;
   document.getElementById('contrasena').value = '';
@@ -190,36 +228,60 @@ window.editarUsuario = function(id) {
 
 /** Guarda (crea o modifica) el usuario del modal. */
 async function guardarUsuario() {
-  const data = {
-    usuario: document.getElementById('usuario').value,
-    nombre: document.getElementById('nombre').value,
-    apellido: document.getElementById('apellido').value,
-    email: document.getElementById('email').value,
-    telefono: document.getElementById('telefono').value || null,
+  const btn = document.getElementById('btnGuardarUsuario');
+  const datos = {
+    usuario: document.getElementById('usuario').value.trim(),
+    nombre: document.getElementById('nombre').value.trim(),
+    apellido: document.getElementById('apellido').value.trim(),
+    email: document.getElementById('email').value.trim(),
+    telefono: document.getElementById('telefono').value.trim() || null,
     habilitado: document.getElementById('habilitado').value === 'true',
   };
-  if (document.getElementById('contrasena').value) {
-    data.contrasena = document.getElementById('contrasena').value;
+
+  // La contraseña solo viaja si se escribió; el backend la exige al crear y la
+  // ignora en un PATCH vacío.
+  const contrasena = document.getElementById('contrasena').value;
+  if (contrasena) datos.contrasena = contrasena;
+
+  if (!editingUsuarioId && !contrasena) {
+    showToast('La contraseña es obligatoria al crear un usuario', 'error');
+    return;
   }
-  let res;
-  if (editingUsuarioId) {
-    res = await apiRequest(`/usuarios/${editingUsuarioId}`, { method: 'PATCH', body: JSON.stringify(data) });
-  } else {
-    res = await apiRequest('/usuarios', { method: 'POST', body: JSON.stringify(data) });
-  }
-  if (res.ok) {
-    showToast(editingUsuarioId ? 'Usuario modificado' : 'Usuario creado', 'success');
-    modalUsuario.hide();
-    await cargarUsuarios();
-  } else {
-    showToast(res.mensaje || 'Error al guardar usuario', 'error');
+
+  btn.disabled = true;
+  try {
+    const res = editingUsuarioId
+      ? await apiRequest(`/usuarios/${editingUsuarioId}`, { method: 'PATCH', body: JSON.stringify(datos) })
+      : await apiRequest('/usuarios', { method: 'POST', body: JSON.stringify(datos) });
+
+    if (res.ok) {
+      showToast(editingUsuarioId ? 'Usuario modificado' : 'Usuario creado', 'success');
+      modalUsuario.hide();
+      await cargarUsuarios();
+    } else {
+      // Los errores de validación del backend vienen en `errors[]`.
+      const detalle = Array.isArray(res.errors) ? `: ${res.errors.map((e) => e.msg).join(' ')}` : '';
+      showToast((res.mensaje || 'Error al guardar usuario') + detalle, 'error');
+    }
+  } finally {
+    btn.disabled = false;
   }
 }
 
-window.eliminarUsuario = async function(id) {
+window.eliminarUsuario = async function (id) {
+  const usuario = usuariosData.find((u) => u.id === id);
+
+  // El backend impide el borrado si el usuario tiene incidencias asociadas
+  // (FK ON DELETE RESTRICT); avisar antes de intentarlo evita el error.
+  const tieneIncidencias = (usuario?.incidencias_creadas ?? 0) > 0 || (usuario?.incidencias_actualizadas ?? 0) > 0;
+  const mensaje = tieneIncidencias
+    ? `“${usuario.usuario}” tiene incidencias registradas en la bitácora. No se puede eliminar; deshabilítalo en su lugar.`
+    : `¿Eliminar al usuario “${usuario?.usuario || id}”?`;
+
   // uiConfirmar() (js/ui.js) es el equivalente visual del confirm() nativo:
   // mismo flujo, misma decisión, pero con modal Bootstrap.
-  if (!(await uiConfirmar('¿Eliminar este usuario?'))) return;
+  if (!(await uiConfirmar(mensaje))) return;
+
   const res = await apiRequest(`/usuarios/${id}`, { method: 'DELETE' });
   if (res.ok) {
     showToast('Usuario eliminado', 'success');

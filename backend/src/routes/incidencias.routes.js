@@ -2,19 +2,24 @@
  * =====================================================================
  * routes/incidencias.routes.js — Bitácora (/api/incidencias)
  * =====================================================================
- * Guards por operación:
+ * Guards por operación (nombres exactos del catálogo en schema.sql):
  *   listar/detalle/sugeridos -> VER_INCIDENCIAS
- *   crear                    -> CREAR_INCIDENCIA
- *   modificar/cerrar         -> MODIFICAR_INCIDENCIA
- *   eliminar                 -> ELIMINAR_INCIDENCIA
+ *   crear                    -> CREAR_INCIDENCIAS
+ *   modificar/cerrar         -> MODIFICAR_INCIDENCIAS
+ *   eliminar                 -> ELIMINAR_INCIDENCIAS
  *
  * El cierre se hace vía PATCH /:id con { cerrar: true }; PATCH /:id/cerrar
- * queda disponible para usarlo directo desde otro cliente.
+ * queda disponible para cerrarla sin editar el resto de campos.
+ *
+ * `tipo_centro` ya no existe en el schema, así que se eliminó su validación.
+ * Las columnas de auditoría (`creado_por`, `actualizado_por`) se rechazan
+ * explícitamente en el body: las firma el usuario de la sesión.
  * =====================================================================
  */
 import { Router } from 'express';
 import { body } from 'express-validator';
 import { requireAuth, requirePermission } from '../middlewares/auth.js';
+import { checkValidation, idNumerico } from '../middlewares/validacion.js';
 import {
   listar,
   obtenerPorId,
@@ -27,23 +32,37 @@ import {
 
 const router = Router();
 
+const HORA_HHMMSS = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
+
+/**
+ * Rechaza que el cliente intente escribir la auditoría a mano.
+ * Sin esto, un POST/PATCH podría suplantar al autor de la incidencia.
+ */
+const sinAuditoria = (campo) =>
+  body(campo)
+    .not()
+    .exists()
+    .withMessage(`El campo ${campo} lo define el servidor y no puede enviarse`);
+
 const crearIncidenciaValidation = [
-  body('tipo_centro')
-    .isIn(['DISTRIBUCION', 'TRANSFERENCIA'])
-    .withMessage('Tipo centro debe ser DISTRIBUCION o TRANSFERENCIA'),
   body('centro').notEmpty().trim().escape(),
   body('sistema').notEmpty().trim().escape(),
   body('incidencia').notEmpty().trim().escape(),
   body('ticket').notEmpty().isLength({ max: 59 }).trim().escape(),
   body('responsable').notEmpty().isLength({ max: 60 }).trim().escape(),
   body('descripcion').notEmpty().isLength({ max: 255 }).trim().escape(),
+  sinAuditoria('creado_por'),
+  sinAuditoria('actualizado_por'),
+];
+
+const cerrarIncidenciaValidation = [
+  body('hora_fin')
+    .optional({ values: 'falsy' })
+    .matches(HORA_HHMMSS)
+    .withMessage('Hora de fin inválida'),
 ];
 
 const actualizarIncidenciaValidation = [
-  body('tipo_centro')
-    .optional()
-    .isIn(['DISTRIBUCION', 'TRANSFERENCIA'])
-    .withMessage('Tipo centro debe ser DISTRIBUCION o TRANSFERENCIA'),
   body('centro').optional().notEmpty().trim().escape(),
   body('sistema').optional().notEmpty().trim().escape(),
   body('incidencia').optional().notEmpty().trim().escape(),
@@ -56,20 +75,55 @@ const actualizarIncidenciaValidation = [
     .withMessage('Fecha inválida'),
   body('hora_inicio')
     .optional({ values: 'falsy' })
-    .matches(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/)
+    .matches(HORA_HHMMSS)
     .withMessage('Hora de inicio inválida'),
   body('hora_fin')
     .optional({ values: 'falsy' })
-    .matches(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/)
+    .matches(HORA_HHMMSS)
     .withMessage('Hora de fin inválida'),
+  body('cerrar')
+    .optional()
+    .isBoolean()
+    .withMessage('El campo cerrar debe ser booleano'),
+  sinAuditoria('creado_por'),
+  sinAuditoria('actualizado_por'),
 ];
 
 router.get('/', requireAuth, requirePermission('VER_INCIDENCIAS'), listar);
 router.get('/valores-sugeridos', requireAuth, requirePermission('VER_INCIDENCIAS'), valoresSugeridos);
-router.get('/:id', requireAuth, requirePermission('VER_INCIDENCIAS'), obtenerPorId);
-router.post('/', requireAuth, requirePermission('CREAR_INCIDENCIA'), crearIncidenciaValidation, crear);
-router.patch('/:id', requireAuth, requirePermission('MODIFICAR_INCIDENCIA'), actualizarIncidenciaValidation, actualizar);
-router.patch('/:id/cerrar', requireAuth, requirePermission('MODIFICAR_INCIDENCIA'), cerrar);
-router.delete('/:id', requireAuth, requirePermission('ELIMINAR_INCIDENCIA'), eliminar);
+router.get('/:id', requireAuth, requirePermission('VER_INCIDENCIAS'), idNumerico('id'), obtenerPorId);
+router.post(
+  '/',
+  requireAuth,
+  requirePermission('CREAR_INCIDENCIAS'),
+  crearIncidenciaValidation,
+  checkValidation,
+  crear
+);
+router.patch(
+  '/:id',
+  requireAuth,
+  requirePermission('MODIFICAR_INCIDENCIAS'),
+  idNumerico('id'),
+  actualizarIncidenciaValidation,
+  checkValidation,
+  actualizar
+);
+router.patch(
+  '/:id/cerrar',
+  requireAuth,
+  requirePermission('MODIFICAR_INCIDENCIAS'),
+  idNumerico('id'),
+  cerrarIncidenciaValidation,
+  checkValidation,
+  cerrar
+);
+router.delete(
+  '/:id',
+  requireAuth,
+  requirePermission('ELIMINAR_INCIDENCIAS'),
+  idNumerico('id'),
+  eliminar
+);
 
 export default router;

@@ -10,10 +10,10 @@
  */
 import rolesService from '../services/rolesService.js';
 
-/** GET /api/roles — lista todos los roles. */
+/** GET /api/roles — lista roles con auditoría y conteos. Acepta ?tipo=SISTEMA|PERSONALIZADO. */
 export async function listar(req, res, next) {
   try {
-    const roles = await rolesService.listarRoles();
+    const roles = await rolesService.listarRoles(req.query);
     res.json({ ok: true, data: roles });
   } catch (error) {
     next(error);
@@ -23,7 +23,7 @@ export async function listar(req, res, next) {
 /** POST /api/roles — crea un rol. */
 export async function crear(req, res, next) {
   try {
-    const rol = await rolesService.crearRol(req.body);
+    const rol = await rolesService.crearRol(req.body, req.session.userId);
     res.status(201).json({ ok: true, data: rol });
   } catch (error) {
     next(error);
@@ -34,7 +34,7 @@ export async function crear(req, res, next) {
 export async function actualizar(req, res, next) {
   try {
     const { id } = req.params;
-    const rol = await rolesService.actualizarRol(id, req.body);
+    const rol = await rolesService.actualizarRol(id, req.body, req.session.userId);
     res.json({ ok: true, data: rol });
   } catch (error) {
     next(error);

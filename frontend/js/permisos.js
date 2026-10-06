@@ -9,6 +9,14 @@
  * en vivo, sin recargar. Los modales generan checkboxes
  * dinámicos de todos los permisos disponibles.
  *
+ * ALINEADO CON EL BACKEND (permisosService.js):
+ *   - Renombrar exige MODIFICAR_PERMISOS y borrar ELIMINAR_PERMISOS. Antes ambos
+ *     botones usaban CREAR_PERMISOS, que solo corresponde al alta.
+ *   - Cada fila trae su auditoría y los conteos de uso (roles que lo tienen,
+ *     usuarios con concedido / denegado).
+ *   - /roles y /usuarios solo se piden si hacen falta para los modales de
+ *     asignación, que exigen ASIGNAR_PERMISOS.
+ *
  * Para extender: reutiliza filaPermisoAsignado() para chips de permisos
  * concedidos y los contenedores .perm-rol-check / .perm-usu-check.
  * =====================================================================
@@ -30,7 +38,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('btnGuardarPermiso').addEventListener('click', guardarPermiso);
   }
   
-  if (hasPermission('ASIGNAR_PERMISOS')) {
+  if (hasPermission(PERMISOS.USUARIOS.ASIGNAR_PERMISOS)) {
     document.getElementById('btnAsignarPermisosRol').style.display = 'inline-block';
     document.getElementById('btnAsignarPermisosUsuario').style.display = 'inline-block';
     document.getElementById('btnAsignarPermisosRol').addEventListener('click', abrirAsignarPermisosRol);
@@ -70,25 +78,26 @@ document.addEventListener('DOMContentLoaded', async () => {
   await cargarDatos();
 });
 
-/** Carga permisos, roles y usuarios en paralelo y repinta la tabla. */
+/**
+ * Carga el catálogo de permisos y, si la sesión puede asignarlos, los catálogos
+ * de roles y usuarios que alimentan los dos modales de asignación.
+ *
+ * Pedir /roles o /usuarios sin permiso no es un error, pero devuelve 403 y
+ * solo añade ruido: se evitan esas peticiones.
+ */
 async function cargarDatos() {
+  const puedeAsignar = hasPermission(PERMISOS.USUARIOS.ASIGNAR_PERMISOS);
+
   const [permisosRes, rolesRes, usuariosRes] = await Promise.all([
     apiRequest('/permisos'),
-    apiRequest('/roles'),
-    apiRequest('/usuarios'),
+    puedeAsignar ? apiRequest('/roles') : Promise.resolve({ ok: false }),
+    puedeAsignar ? apiRequest('/usuarios') : Promise.resolve({ ok: false }),
   ]);
+
   if (permisosRes.ok) permisosData = permisosRes.data;
   if (rolesRes.ok) rolesData = rolesRes.data;
   if (usuariosRes.ok) usuariosData = usuariosRes.data;
   renderTablaPermisos();
-}
-
-/** Formatea un timestamp del API (creado_en / actualizado_en) en fecha y hora local. */
-function formatFechaHora(valor) {
-  if (!valor) return '-';
-  const d = new Date(valor);
-  if (Number.isNaN(d.getTime())) return '-';
-  return d.toLocaleDateString('es-ES');
 }
 
 /** Pinta la tabla de permisos aplicando el filtro por nombre. */
@@ -109,24 +118,43 @@ function renderTablaPermisos() {
   });
 
   if (permisosFiltrados.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">No hay permisos que coincidan con la búsqueda</td></tr>';
+    tbody.innerHTML =
+      '<tr><td colspan="7" class="text-center text-muted py-4">No hay permisos que coincidan con la búsqueda</td></tr>';
     return;
   }
 
-  permisosFiltrados.forEach(p => {
+  const puedeModificar = hasPermission(PERMISOS.PERMISOS.MODIFICAR);
+  const puedeEliminar = hasPermission(PERMISOS.PERMISOS.ELIMINAR);
+
+  permisosFiltrados.forEach((p) => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${p.id}</td>
-      <td>${p.nombre}</td>
-      <td>${formatFechaHora(p.creado_en)}</td>
-      <td>${formatFechaHora(p.actualizado_en)}</td>
+      <td><code>${escaparHtml(p.nombre)}</code></td>
+      <td class="text-center">
+        <span class="badge bg-light text-dark" title="Roles SISTEMA que lo tienen en su plantilla (Lógica A)">${p.total_roles ?? 0}</span>
+      </td>
+      <td class="text-center">
+        <span class="badge bg-success" title="Usuarios con el permiso concedido (Lógica B)">${p.usuarios_concedidos ?? 0}</span>
+        <span class="badge bg-secondary" title="Usuarios con el permiso denegado explícitamente (Lógica B)">${p.usuarios_denegados ?? 0}</span>
+      </td>
+      <td>${autorLegible(p.creado_por_usuario, p.creado_por_nombre)}<small class="text-muted">${escaparHtml(formatearFechaHora(p.creado_en))}</small></td>
+      <td>${autorLegible(p.actualizado_por_usuario, p.actualizado_por_nombre)}<small class="text-muted">${escaparHtml(formatearFechaHora(p.actualizado_en))}</small></td>
       <td>
-        ${hasPermission('CREAR_PERMISOS') ? `<button class="btn btn-sm btn-warning ms-1" onclick="editarPermiso(${p.id})" title="Modificar" aria-label="Modificar"><i class="bi bi-pencil"></i></button>` : ''}
-        ${hasPermission('CREAR_PERMISOS') ? `<button class="btn btn-sm btn-danger ms-1" onclick="eliminarPermiso(${p.id})" title="Eliminar" aria-label="Eliminar"><i class="bi bi-trash"></i></button>` : ''}
+        ${puedeModificar ? `<button class="btn btn-sm btn-warning ms-1" onclick="editarPermiso(${p.id})" title="Modificar" aria-label="Modificar ${escaparHtml(p.nombre)}"><i class="bi bi-pencil"></i></button>` : ''}
+        ${puedeEliminar ? `<button class="btn btn-sm btn-danger ms-1" onclick="eliminarPermiso(${p.id})" title="Eliminar" aria-label="Eliminar ${escaparHtml(p.nombre)}"><i class="bi bi-trash"></i></button>` : ''}
       </td>
     `;
     tbody.appendChild(tr);
   });
+}
+
+/** Nombre legible del autor de auditoría, con el usuario como respaldo. */
+function autorLegible(usuario, nombre) {
+  const etiqueta = nombre || usuario;
+  if (!etiqueta) return '<span class="text-muted">—</span>';
+  const sufijo = usuario && usuario !== etiqueta ? `<small class="text-muted">@${escaparHtml(usuario)}</small>` : '';
+  return `<div>${escaparHtml(etiqueta)}</div>${sufijo}`;
 }
 
 /** Abre el modal en modo "nuevo permiso". */
@@ -167,7 +195,7 @@ window.eliminarPermiso = async function (id) {
 /** Guarda (crea o modifica) el permiso del modal. */
 async function guardarPermiso() {
   const id = document.getElementById('permisoId').value;
-  const nombre = document.getElementById('nombrePermiso').value;
+  const nombre = document.getElementById('nombrePermiso').value.trim();
   if (!nombre) return;
 
   let res;
@@ -189,7 +217,8 @@ async function guardarPermiso() {
     document.getElementById('formPermiso').reset();
     await cargarDatos();
   } else {
-    showToast(res.mensaje || 'Error al guardar permiso', 'error');
+    const detalle = Array.isArray(res.errors) ? `: ${res.errors.map((e) => e.msg).join(' ')}` : '';
+    showToast((res.mensaje || 'Error al guardar permiso') + detalle, 'error');
   }
 }
 
@@ -199,7 +228,7 @@ function abrirAsignarPermisosRol() {
   selectRol.innerHTML = '<option value="">Seleccionar rol SISTEMA...</option>';
   rolesData.forEach(r => {
     if (r.tipo === 'SISTEMA') {
-      selectRol.innerHTML += `<option value="${r.id}">${r.nombre}</option>`;
+      selectRol.innerHTML += `<option value="${r.id}">${escaparHtml(r.nombre)}</option>`;
     }
   });
   const container = document.getElementById('permisosRolContainer');
@@ -209,7 +238,7 @@ function abrirAsignarPermisosRol() {
     div.className = 'form-check';
     div.innerHTML = `
       <input class="form-check-input perm-rol-check" type="checkbox" value="${p.id}" id="pr_${p.id}">
-      <label class="form-check-label" for="pr_${p.id}">${p.nombre}</label>
+      <label class="form-check-label" for="pr_${p.id}">${escaparHtml(p.nombre)}</label>
     `;
     container.appendChild(div);
   });
@@ -248,23 +277,17 @@ async function cargarAsignadosRolSistema() {
   });
 
   chips.innerHTML = '';
-  asignados.forEach(p => {
-    const div = document.createElement('div');
-    div.className = 'd-flex justify-content-between align-items-center border rounded px-2 py-1 bg-success bg-opacity-10';
-    div.style.minWidth = '260px';
-    div.innerHTML = `
-      <span>${p.nombre}</span>
-      <button type="button" class="btn btn-sm btn-outline-danger" title="Quitar" aria-label="Quitar"
-        onclick="quitarPermisoDeRolSistema(${rolId}, ${p.id}, '${p.nombre}')">
-        <i class="bi bi-x-circle"></i>
-      </button>`;
-    chips.appendChild(div);
+  asignados.forEach((p) => {
+    chips.appendChild(
+      filaPermisoAsignado(p.nombre, `quitarPermisoDeRolSistema(${Number(rolId)}, ${Number(p.id)})`)
+    );
   });
 }
 
-window.quitarPermisoDeRolSistema = async function (rolId, permisoId, nombre) {
+window.quitarPermisoDeRolSistema = async function (rolId, permisoId) {
   const res = await apiRequest(`/roles/${rolId}/permisos/${permisoId}`, { method: 'DELETE' });
   if (res.ok) {
+    const nombre = permisosData.find((p) => p.id === Number(permisoId))?.nombre ?? permisoId;
     showToast(`Permiso ${nombre} quitado del rol`, 'success');
     await cargarAsignadosRolSistema();
   } else {
@@ -299,7 +322,7 @@ async function abrirAsignarPermisosUsuario() {
   selectUsuario.innerHTML = '<option value="">Seleccionar usuario...</option>';
   usuariosData.forEach(u => {
     const roles = (u.roles || []).map(r => r.nombre).join(', ') || 'sin roles';
-    selectUsuario.innerHTML += `<option value="${u.id}">${u.usuario} - ${u.nombre} ${u.apellido} [${roles}]</option>`;
+    selectUsuario.innerHTML += `<option value="${u.id}">${escaparHtml(`${u.usuario} - ${u.nombre} ${u.apellido} [${roles}]`)}</option>`;
   });
 
   selectUsuario.onchange = () => cargarRolPersonalizadoDelUsuario();
@@ -311,7 +334,7 @@ async function abrirAsignarPermisosUsuario() {
     div.className = 'form-check';
     div.innerHTML = `
       <input class="form-check-input perm-usu-check" type="checkbox" value="${p.id}" id="pu_${p.id}">
-      <label class="form-check-label" for="pu_${p.id}">${p.nombre}</label>
+      <label class="form-check-label" for="pu_${p.id}">${escaparHtml(p.nombre)}</label>
     `;
     container.appendChild(div);
   });
@@ -371,8 +394,10 @@ async function cargarRolPersonalizadoDelUsuario() {
   });
 
   chips.innerHTML = '';
-  permisos.forEach(p => {
-    chips.appendChild(filaPermisoAsignado(p.nombre, `quitarPermisoDeUsuario(${usuarioId}, ${p.id}, '${p.nombre}')`));
+  permisos.forEach((p) => {
+    chips.appendChild(
+      filaPermisoAsignado(p.nombre, `quitarPermisoDeUsuario(${Number(usuarioId)}, ${Number(p.id)})`)
+    );
   });
 }
 
@@ -381,17 +406,20 @@ function filaPermisoAsignado(nombre, onclickQuitar) {
   const div = document.createElement('div');
   div.className = 'd-flex justify-content-between align-items-center border rounded px-2 py-1 bg-success bg-opacity-10';
   div.style.minWidth = '260px';
+  // `nombre` va escapado y `onclickQuitar` solo lleva ids numéricos: un nombre
+  // con comillas no puede romper el onclick ni inyectar atributos.
   div.innerHTML = `
-    <span>${nombre}</span>
-    <button type="button" class="btn btn-sm btn-outline-danger" title="Quitar" aria-label="Quitar" onclick="${onclickQuitar}">
+    <span>${escaparHtml(nombre)}</span>
+    <button type="button" class="btn btn-sm btn-outline-danger" title="Quitar" aria-label="Quitar ${escaparHtml(nombre)}" onclick="${onclickQuitar}">
       <i class="bi bi-x-circle"></i>
     </button>`;
   return div;
 }
 
-window.quitarPermisoDeUsuario = async function (usuarioId, permisoId, nombre) {
+window.quitarPermisoDeUsuario = async function (usuarioId, permisoId) {
   const res = await apiRequest(`/usuarios/${usuarioId}/permisos-personalizados/${permisoId}`, { method: 'DELETE' });
   if (res.ok) {
+    const nombre = permisosData.find((p) => p.id === Number(permisoId))?.nombre ?? permisoId;
     showToast(`Permiso ${nombre} quitado al usuario`, 'success');
     await cargarRolPersonalizadoDelUsuario();
   } else {

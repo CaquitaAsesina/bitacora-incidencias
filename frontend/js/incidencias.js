@@ -34,7 +34,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (!me) return;
 
   // Mostrar/ocultar botón nueva incidencia según permiso
-  if (hasPermission('CREAR_INCIDENCIA')) {
+  if (hasPermission(PERMISOS.INCIDENCIAS.CREAR)) {
     document.getElementById('btnNuevaIncidencia').style.display = 'inline-block';
   }
 
@@ -59,10 +59,59 @@ document.addEventListener('DOMContentLoaded', async () => {
 // Valores sugeridos por campo, cargados del backend
 let sugerencias = { centro: [], sistema: [], incidencia: [], responsable: [] };
 
-/** Recarga los valores sugeridos desde el backend. */
+/** Reload de los valores sugeridos desde el backend. */
 async function cargarSugerencias() {
   const res = await apiRequest('/incidencias/valores-sugeridos');
-  if (res.ok) sugerencias = res.data;
+  if (res.ok) {
+    sugerencias = res.data;
+    pintarListasSugeridas();
+  }
+}
+
+/**
+ * Rellena los <datalist> de los filtros y el desplegable de autores.
+ *
+ * `criadores` viene del mismo endpoint: son los usuarios que han registrado al
+ * menos una incidencia, resueltos con idx_incidencias_creado_por. Es lo que
+ * sustituye al antiguo input numérico "usuario_id".
+ */
+function pintarListasSugeridas() {
+  const listas = {
+    listaCentros: sugerencias.centro || [],
+    listaSistemas: sugerencias.sistema || [],
+    listaIncidencias: sugerencias.incidencia || [],
+    listaResponsables: sugerencias.responsable || [],
+  };
+
+  for (const [id, valores] of Object.entries(listas)) {
+    const datalist = document.getElementById(id);
+    if (!datalist) continue;
+    datalist.innerHTML = valores
+      .map((v) => `<option value="${escaparHtml(v)}"></option>`)
+      .join('');
+  }
+
+  const selectAutores = document.getElementById('filtroCreadoPor');
+  if (!selectAutores) return;
+
+  const seleccionado = selectAutores.value;
+  const autores = sugerencias.criadores || [];
+  selectAutores.innerHTML =
+    '<option value="">Todos</option>' +
+    autores
+      .map(
+        (u) =>
+          `<option value="${u.id}">${escaparHtml(
+            [u.nombre, u.apellido].filter(Boolean).join(' ') || u.usuario
+          )}${u.habilitado ? '' : ' (bloqueado)'}</option>`
+      )
+      .join('');
+
+  // Conserva la selección si el usuario ya había filtrado por autor y sigue
+  // existiendo en la lista.
+  if (seleccionado && autores.some((u) => String(u.id) === String(seleccionado))) {
+    selectAutores.value = seleccionado;
+  }
 }
 
 /**
@@ -144,74 +193,107 @@ async function cargarIncidencias() {
   params.append('page', currentPage);
   params.append('limit', 10);
 
-  const desde = document.getElementById('filtroDesde').value;
-  const hasta = document.getElementById('filtroHasta').value;
-  const tipoCentro = document.getElementById('filtroTipoCentro').value;
-  const estado = document.getElementById('filtroEstado').value;
-  const usuarioId = document.getElementById('filtroUsuarioId').value;
-  const respTexto = document.getElementById('filtroRespTexto').value;
-  const centro = document.getElementById('filtroCentro').value;
-  const sistema = document.getElementById('filtroSistema').value;
-  const incidencia = document.getElementById('filtroIncidencia').value;
-  const q = document.getElementById('filtroQ').value;
+  // Los filtros de dimensión viajan como igualdad exacta para que el backend
+  // use los índices compuestos (columna, fecha); `q` es la única búsqueda
+  // parcial y va aparte.
+  const filtros = {
+    fecha_desde: document.getElementById('filtroDesde').value,
+    fecha_hasta: document.getElementById('filtroHasta').value,
+    estado: document.getElementById('filtroEstado').value,
+    orden: document.getElementById('filtroOrden').value,
+    creado_por: document.getElementById('filtroCreadoPor').value,
+    centro: document.getElementById('filtroCentro').value.trim(),
+    sistema: document.getElementById('filtroSistema').value.trim(),
+    incidencia: document.getElementById('filtroIncidencia').value.trim(),
+    responsable: document.getElementById('filtroRespTexto').value.trim(),
+    q: document.getElementById('filtroQ').value.trim(),
+  };
 
-  if (desde) params.append('fecha_desde', desde);
-  if (hasta) params.append('fecha_hasta', hasta);
-  if (tipoCentro) params.append('tipo_centro', tipoCentro);
-  if (estado) params.append('estado', estado);
-  if (usuarioId) params.append('usuario_id', usuarioId);
-  if (respTexto) params.append('responsable_texto', respTexto);
-  if (centro) params.append('centro', centro);
-  if (sistema) params.append('sistema', sistema);
-  if (incidencia) params.append('incidencia', incidencia);
-  if (q) params.append('q', q);
+  for (const [clave, valor] of Object.entries(filtros)) {
+    if (valor) params.append(clave, valor);
+  }
 
   const res = await apiRequest(`/incidencias?${params.toString()}`);
   if (res.ok) {
     renderTabla(res.data);
     renderPaginacion(res.pagination);
+    renderResumenEstados(res.estado);
   }
 }
 
-/** Pinta las filas de la tabla de incidencias. */
+/**
+ * Muestra el total de abiertas/cerradas del subconjunto filtrado.
+ * El backend solo lo devuelve cuando el listado NO está filtrado por estado.
+ */
+function renderResumenEstados(estado) {
+  const cont = document.getElementById('resumenEstados');
+  if (!cont) return;
+
+  if (!estado) {
+    cont.innerHTML = '';
+    return;
+  }
+
+  cont.innerHTML = `
+    <span><i class="bi bi-list-ul"></i> Total filtrado: <strong>${estado.total}</strong></span>
+    <span><i class="bi bi-hourglass-split"></i> Abiertas: <strong>${estado.abiertas}</strong></span>
+    <span><i class="bi bi-check-circle"></i> Cerradas: <strong>${estado.cerradas}</strong></span>
+  `;
+}
+
+/** Pinta las filas de la tabla de incidencias con todos sus campos. */
 function renderTabla(incidencias) {
   const tbody = document.getElementById('tablaIncidenciasBody');
   tbody.innerHTML = '';
 
   if (incidencias.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="12" class="text-center text-muted py-4">No hay incidencias</td></tr>';
+    tbody.innerHTML =
+      '<tr><td colspan="16" class="text-center text-muted py-4">No hay incidencias</td></tr>';
     return;
   }
 
-  incidencias.forEach(inc => {
+  incidencias.forEach((inc) => {
     const abierta = inc.hora_fin === null;
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${inc.id}</td>
-      <td class="fw-semibold">${inc.ticket}</td>
+      <td class="fw-semibold">${escaparHtml(inc.ticket)}</td>
       <td>${formatDate(inc.fecha)}</td>
       <td>${inc.hora_inicio || '-'}</td>
       <td>${inc.hora_fin || '-'}</td>
-      <td>${inc.centro}</td>
-      <td>${inc.sistema}</td>
-      <td>${inc.incidencia}</td>
-      <td>${inc.responsable}</td>
+      <td>${escaparHtml(inc.centro)}</td>
+      <td>${escaparHtml(inc.sistema)}</td>
+      <td>${escaparHtml(inc.incidencia)}</td>
+      <td>${escaparHtml(inc.responsable)}</td>
+      <td title="${escaparHtml(inc.creado_por_usuario || '')}">${autorLegible(inc.creado_por_nombre, inc.creado_por_usuario, inc.creado_por)}</td>
+      <td title="${escaparHtml(inc.actualizado_por_usuario || '')}">${autorLegible(inc.actualizado_por_nombre, inc.actualizado_por_usuario, inc.actualizado_por)}</td>
       <td><span class="badge ${abierta ? 'bg-danger' : 'bg-success'}">${abierta ? 'Abierta' : 'Cerrada'}</span></td>
       <td>${inc.tiempo_solucion || '-'}</td>
+      <td class="text-nowrap">${formatDateTime(inc.creado_en)}</td>
+      <td class="text-nowrap">${formatDateTime(inc.actualizado_en)}</td>
       <td class="text-nowrap">
         <button class="btn btn-sm btn-outline-primary" onclick="verIncidencia(${inc.id})" title="Ver detalle" aria-label="Ver detalle">
           <i class="bi bi-eye"></i>
         </button>
-        ${hasPermission('MODIFICAR_INCIDENCIA') ? `<button class="btn btn-sm btn-warning ms-1" onclick="abrirEditarIncidencia(${inc.id})" title="Modificar">
+        ${hasPermission(PERMISOS.INCIDENCIAS.MODIFICAR) ? `<button class="btn btn-sm btn-warning ms-1" onclick="abrirEditarIncidencia(${inc.id})" title="Modificar">
           <i class="bi bi-pencil"></i>
         </button>` : ''}
-        ${hasPermission('ELIMINAR_INCIDENCIA') ? `<button class="btn btn-sm btn-danger ms-1" onclick="eliminarIncidencia(${inc.id})" title="Eliminar">
+        ${hasPermission(PERMISOS.INCIDENCIAS.ELIMINAR) ? `<button class="btn btn-sm btn-danger ms-1" onclick="eliminarIncidencia(${inc.id})" title="Eliminar">
           <i class="bi bi-trash"></i>
         </button>` : ''}
       </td>
     `;
     tbody.appendChild(tr);
   });
+}
+
+/**
+ * Nombre legible del autor de auditoría, con degradación en cascada:
+ * nombre completo -> usuario -> id crudo.
+ */
+function autorLegible(nombre, usuario, id) {
+  const texto = [nombre, usuario].filter(Boolean).join(' · ') || (id ?? '-');
+  return escaparHtml(texto);
 }
 
 /** Pinta el paginador a partir de { page, totalPages }. */
@@ -235,7 +317,6 @@ window.cambiarPagina = (page) => {
 /** Crea una incidencia con los datos del modal de alta. */
 async function guardarIncidencia() {
   const data = {
-    tipo_centro: document.getElementById('tipoCentro').value,
     centro: document.getElementById('centro').value,
     sistema: document.getElementById('sistema').value,
     incidencia: document.getElementById('incidencia').value,
@@ -276,16 +357,22 @@ window.eliminarIncidencia = async (id) => {
 
 /** Limpia los filtros y recarga la primera página. */
 function limpiarFiltros() {
-  document.getElementById('filtroDesde').value = '';
-  document.getElementById('filtroHasta').value = '';
-  document.getElementById('filtroTipoCentro').value = '';
-  document.getElementById('filtroEstado').value = '';
-  document.getElementById('filtroUsuarioId').value = '';
-  document.getElementById('filtroRespTexto').value = '';
-  document.getElementById('filtroCentro').value = '';
-  document.getElementById('filtroSistema').value = '';
-  document.getElementById('filtroIncidencia').value = '';
-  document.getElementById('filtroQ').value = '';
+  const campos = [
+    'filtroDesde',
+    'filtroHasta',
+    'filtroEstado',
+    'filtroOrden',
+    'filtroCreadoPor',
+    'filtroCentro',
+    'filtroSistema',
+    'filtroIncidencia',
+    'filtroRespTexto',
+    'filtroQ',
+  ];
+  campos.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.value = el.tagName === 'SELECT' && id === 'filtroOrden' ? 'fecha_desc' : '';
+  });
   currentPage = 1;
   cargarIncidencias();
 }
@@ -333,16 +420,28 @@ window.verIncidencia = async function (id) {
   badge.className = `badge fs-6 ${abierta ? 'bg-danger' : 'bg-success'}`;
 
   document.getElementById('detalleDatos').innerHTML = [
-    ['Tipo de centro', inc.tipo_centro],
     ['Centro', inc.centro],
     ['Sistema', inc.sistema],
     ['Incidencia', inc.incidencia],
+    ['Ticket', inc.ticket],
     ['Responsable', inc.responsable],
-    ['Registrado por', inc.responsable_actual_nombre || '-'],
   ].map(([k, v]) => `
       <div class="col-md-4">
         <div class="text-muted small text-uppercase">${k}</div>
         <div class="fw-semibold">${escaparHtml(v)}</div>
+      </div>`).join('');
+
+  // Auditoría: las dos columnas reales del schema. `responsable` es el dato de
+  // negocio (quién atiende), no el usuario del sistema que registró la fila.
+  document.getElementById('detalleAuditoria').innerHTML = [
+    ['Registrado por', autorLegible(inc.creado_por_nombre, inc.creado_por_usuario, inc.creado_por)],
+    ['Última edición por', autorLegible(inc.actualizado_por_nombre, inc.actualizado_por_usuario, inc.actualizado_por)],
+    ['Alta', formatDateTime(inc.creado_en)],
+    ['Última modificación', formatDateTime(inc.actualizado_en)],
+  ].map(([k, v]) => `
+      <div class="col-md-3">
+        <div class="text-muted small text-uppercase">${k}</div>
+        <div class="fw-semibold">${v}</div>
       </div>`).join('');
 
   document.getElementById('detalleTiempos').innerHTML = [
@@ -350,16 +449,14 @@ window.verIncidencia = async function (id) {
     ['Hora de inicio', inc.hora_inicio || '-'],
     ['Hora de fin', inc.hora_fin || '-'],
     ['Tiempo de solución', inc.tiempo_solucion || '-'],
-    ['Creado', formatDateTime(inc.creado_en)],
-    ['Última actualización', formatDateTime(inc.actualizado_en)],
   ].map(([k, v]) => `
-      <div class="col-md-4">
+      <div class="col-md-3">
         <div class="text-muted small text-uppercase">${k}</div>
         <div class="fw-semibold">${escaparHtml(v)}</div>
       </div>`).join('');
 
   document.getElementById('detalleDescripcion').textContent = inc.descripcion || '-';
-  document.getElementById('btnDetalleEditar').style.display = hasPermission('MODIFICAR_INCIDENCIA') ? '' : 'none';
+  document.getElementById('btnDetalleEditar').style.display = hasPermission(PERMISOS.INCIDENCIAS.MODIFICAR) ? '' : 'none';
 
   modalDetalle.show();
 };
@@ -382,7 +479,6 @@ window.abrirEditarIncidencia = async function (id) {
 
   const inc = res.data;
   document.getElementById('editarId').value = inc.id;
-  document.getElementById('editarTipoCentro').value = inc.tipo_centro;
   document.getElementById('editarTicket').value = inc.ticket;
   document.getElementById('editarCentro').value = inc.centro;
   document.getElementById('editarSistema').value = inc.sistema;
@@ -410,7 +506,6 @@ document.getElementById('btnGuardarEditarIncidencia').addEventListener('click', 
   const horaFin = document.getElementById('editarHoraFin').value;
 
   const body = {
-    tipo_centro: document.getElementById('editarTipoCentro').value,
     ticket: document.getElementById('editarTicket').value,
     centro: document.getElementById('editarCentro').value,
     sistema: document.getElementById('editarSistema').value,
@@ -447,13 +542,6 @@ document.getElementById('btnGuardarEditarIncidencia').addEventListener('click', 
   }
 });
 // ---------- helpers ----------
-
-/** Escapa texto para insertarlo seguro en HTML. */
-function escaparHtml(valor) {
-  const div = document.createElement('div');
-  div.textContent = valor === null || valor === undefined ? '' : valor;
-  return div.innerHTML;
-}
 
 function formatDateTime(dateStr) {
   if (!dateStr) return '-';

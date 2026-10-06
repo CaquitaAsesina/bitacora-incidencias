@@ -8,6 +8,7 @@
   sin cambios. Las clases .perm-rol-check / .perm-usu-check las genera permisos.js.
 -->
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -21,7 +22,8 @@
     <!-- Tipografía -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
 
     <!-- Bootstrap 5.3 + iconos + tema de la app (orden obligatorio) -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -29,11 +31,12 @@
     <link rel="stylesheet" href="css/styles.css">
     <link rel="stylesheet" href="css/theme.css">
 </head>
+
 <body class="ui-pagina-app">
 
     <!-- ================= Overlay de arranque (boot) ================= -->
-    <div class="ui-overlay ui-overlay--boot ui-overlay--visible" id="uiBootOverlay"
-         role="status" aria-live="polite" aria-hidden="false">
+    <div class="ui-overlay ui-overlay--boot ui-overlay--visible" id="uiBootOverlay" role="status" aria-live="polite"
+        aria-hidden="false">
         <div class="ui-overlay__panel">
             <img src="img/logo-farmacias-peruanas.png" alt="Farmacias Peruanas" class="ui-overlay__logo">
             <p class="ui-overlay__titulo">Cargando sistema…</p>
@@ -42,8 +45,8 @@
     </div>
 
     <!-- ================= Overlay de cierre de sesión (rojo) ================= -->
-    <div class="ui-overlay ui-overlay--logout ui-overlay--oculto" id="uiLogoutOverlay"
-         role="status" aria-live="polite" aria-hidden="true">
+    <div class="ui-overlay ui-overlay--logout ui-overlay--oculto" id="uiLogoutOverlay" role="status" aria-live="polite"
+        aria-hidden="true">
         <div class="ui-overlay__panel">
             <img src="img/logo-farmacias-peruanas.png" alt="Farmacias Peruanas" class="ui-overlay__logo">
             <span class="ui-overlay__spinner" aria-hidden="true"></span>
@@ -55,9 +58,8 @@
     <!-- ================= Navbar ================= -->
     <nav class="navbar navbar-expand-lg sticky-top">
         <div class="container-fluid">
-            <button class="navbar-toggler d-md-none me-2" id="uiSidebarToggle" type="button"
-                    data-bs-toggle="offcanvas" data-bs-target="#uiSidebarOffcanvas"
-                    aria-controls="uiSidebarOffcanvas" aria-label="Abrir menú">
+            <button class="navbar-toggler d-md-none me-2" id="uiSidebarToggle" type="button" data-bs-toggle="offcanvas"
+                data-bs-target="#uiSidebarOffcanvas" aria-controls="uiSidebarOffcanvas" aria-label="Abrir menú">
                 <span class="navbar-toggler-icon"></span>
             </button>
 
@@ -75,7 +77,8 @@
                         <i class="bi bi-person-circle"></i> <span id="userInfo">Usuario</span>
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end">
-                        <li><button class="dropdown-item" id="logoutBtn"><i class="bi bi-box-arrow-right"></i> Cerrar Sesión</button></li>
+                        <li><button class="dropdown-item" id="logoutBtn"><i class="bi bi-box-arrow-right"></i> Cerrar
+                                Sesión</button></li>
                     </ul>
                 </div>
             </div>
@@ -112,7 +115,7 @@
                     </div>
                     <div class="card-body">
                         <div class="row g-3">
-                             <div class="col-md-2">
+                            <div class="col-md-2">
                                 <label class="form-label form-label-sm">Desde</label>
                                 <input type="date" class="form-control form-control-sm" id="filtroDesde">
                             </div>
@@ -120,10 +123,10 @@
                                 <label class="form-label form-label-sm">Hasta</label>
                                 <input type="date" class="form-control form-control-sm" id="filtroHasta">
                             </div>
-                            <div class="col-md-4">
-                                <label class="form-label form-label-sm">Nombre</label>
+                            <div class="col-6 col-md-4 col-lg-3">
+                                <label class="form-label mb-1 small">Nombre</label>
                                 <input type="text" class="form-control form-control-sm" id="filtroNombre"
-                                    placeholder="Ej. VER_USUARIOS">
+                                    placeholder="nombre">
                             </div>
                         </div>
                         <div class="mt-3">
@@ -141,8 +144,12 @@
                                     <tr>
                                         <th>ID</th>
                                         <th>Nombre</th>
-                                        <th>Creacion</th>
-                                        <th>Modificado</th>
+                                        <th class="text-center"
+                                            title="Roles SISTEMA que lo tienen en su plantilla (Lógica A)">Roles</th>
+                                        <th class="text-center" title="Usuarios con concedido / denegado (Lógica B)">
+                                            Concedido / Denegado</th>
+                                        <th>Creado por</th>
+                                        <th>Modificado por</th>
                                         <th>Acciones</th>
                                     </tr>
                                 </thead>
@@ -225,7 +232,8 @@
         <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header bg-warning text-dark">
-                    <h5 class="modal-title"><i class="bi bi-person-gear me-2"></i>Asignar Permisos a Usuario (Rol PERSONALIZADO)</h5>
+                    <h5 class="modal-title"><i class="bi bi-person-gear me-2"></i>Asignar Permisos a Usuario (Rol
+                        PERSONALIZADO)</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
@@ -233,13 +241,14 @@
                         <label class="form-label">Usuario *</label>
                         <select class="form-select" id="selectUsuarioPerm"></select>
                         <div class="form-text">
-                            Se usa el rol PERSONALIZADO del usuario. Si no tiene ninguno asignado no se podrán agregar permisos.
+                            Se usa el rol PERSONALIZADO del usuario. Si no tiene ninguno asignado no se podrán agregar
+                            permisos.
                         </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Rol PERSONALIZADO</label>
                         <input type="text" class="form-control" id="rolPersonalizadoResuelto" readonly
-                               placeholder="Seleccione un usuario para ver su rol">
+                            placeholder="Seleccione un usuario para ver su rol">
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Permisos asignados actualmente</label>
@@ -297,4 +306,5 @@
     <script src="js/layout.js" defer></script>
     <script src="js/permisos.js" defer></script>
 </body>
+
 </html>

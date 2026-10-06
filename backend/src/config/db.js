@@ -39,3 +39,37 @@ pool.on('connection', (conn) => {
 });
 
 export default pool;
+
+/**
+ * Ejecuta `fn` dentro de una transacción y libera siempre la conexión.
+ *
+ * mysql2 no tiene transacciones implícitas: sin esto, una operación que borra
+ * y después inserta (o borra y después actualiza) puede dejar la base a medias
+ * si la segunda sentencia falla. El orden correcto siempre es COMMIT y, ante
+ * cualquier error, ROLLBACK.
+ *
+ * `fn` recibe la conexión dedicada: dentro de la transacción hay que usarla
+ * (`conexion.query`), nunca `pool.query`, que abriría otra conexión y
+ * trabajaría fuera de la transacción.
+ *
+ * @template T
+ * @param {(conexion: import('mysql2/promise').PoolConnection) => Promise<T>} fn
+ * @returns {Promise<T>} lo que devuelva `fn` tras el COMMIT
+ */
+export async function withTransaction(fn) {
+  const conexion = await pool.getConnection();
+
+  try {
+    await conexion.beginTransaction();
+    const resultado = await fn(conexion);
+    await conexion.commit();
+    return resultado;
+  } catch (error) {
+    // El rollback también puede fallar si la conexión se perdió; el error
+    // original es el que informa, así que no se enmascara.
+    await conexion.rollback().catch(() => {});
+    throw error;
+  } finally {
+    conexion.release();
+  }
+}

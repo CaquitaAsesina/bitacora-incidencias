@@ -10,7 +10,7 @@
  */
 import permisosService from '../services/permisosService.js';
 
-/** GET /api/permisos — lista todo el catálogo. */
+/** GET /api/permisos — lista el catálogo con auditoría y conteos de uso. */
 export async function listar(req, res, next) {
   try {
     const permisos = await permisosService.listarPermisos();
@@ -24,7 +24,7 @@ export async function listar(req, res, next) {
 export async function crear(req, res, next) {
   try {
     const { nombre } = req.body;
-    const permiso = await permisosService.crearPermiso(nombre);
+    const permiso = await permisosService.crearPermiso(nombre, req.session.userId);
     res.status(201).json({ ok: true, data: permiso });
   } catch (error) {
     next(error);
@@ -36,7 +36,7 @@ export async function actualizar(req, res, next) {
   try {
     const { id } = req.params;
     const { nombre } = req.body;
-    const permiso = await permisosService.actualizarPermiso(id, nombre);
+    const permiso = await permisosService.actualizarPermiso(id, nombre, req.session.userId);
     res.json({ ok: true, data: permiso });
   } catch (error) {
     next(error);

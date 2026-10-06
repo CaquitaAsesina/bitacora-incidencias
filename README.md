@@ -45,27 +45,33 @@ administración de usuarios, roles y permisos.
   - Autocompletado de centro, sistema, incidencia y responsable con los valores
     ya registrados (se pueden ocultar sugerencias sin tocar la base de datos).
 - **Dashboard analítico exclusivo** (permiso `VER_DASHBOARD`): tarjetas KPI y
-  5 gráficos con filtro por rango de fechas.
-- **Administración**: usuarios (con sus roles), roles (SISTEMA/PERSONALIZADO) y
-  catálogo de permisos (crear, renombrar, eliminar y asignar).
-- **Tablas consistentes**: columnas "Creacion"/"Modificado", filtros en vivo
-  (texto, tipo y rango de fechas por creación o modificación), contador de
-  resultados y confirmación visual antes de eliminar.
+  8 gráficos, con un juego de filtros globales (fechas, centro, sistema, tipo
+  de incidencia, responsable, estado y autor de registro).
+- **Administración**: usuarios (con sus roles, sus conteos de incidencias y su
+  auditoría), roles (SISTEMA/PERSONALIZADO con conteos) y catálogo de permisos
+  (crear, renombrar, eliminar y asignar), los tres con quién los creó y quién
+  los modificó por última vez.
+- **Auditoría en todas las tablas**: `incidencias` la firma `creado_por` /
+  `actualizado_por` (autor y última edición); igual `usuarios`, `roles` y
+  `permisos`. El autor **siempre** sale de la sesión, nunca del cuerpo de la
+  petición.
+- **Tablas consistentes**: contador de resultados, filtros en vivo, ordenación
+  con lista blanca y confirmación visual antes de eliminar.
 
 ## 2. Stack tecnológico
 
-| Capa | Tecnología |
-|---|---|
-| Backend | Node.js ≥ 18 + Express 4 (ES Modules, sin TypeScript) |
-| Base de datos | MySQL 8.0.13+ (en producción, Aiven MySQL; Render no ofrece MySQL) |
-| Sesiones | express-session + express-mysql-session (tabla `sessions` en la misma BD) |
-| Driver MySQL | mysql2 (pool de conexiones con keep-alive) |
-| Seguridad | bcrypt (cost 10), helmet, cors, express-validator |
-| Configuración | dotenv (`.env`, no versionado) |
-| Frontend | HTML5 + CSS3 + JavaScript vanilla (sin frameworks de UI) |
-| Estilos | Bootstrap 5 + CSS propio (paleta rojo/blanco) |
-| Gráficos | Chart.js (CDN) |
-| Iconos / tipografía | Bootstrap Icons (CDN) / Google Fonts Inter |
+| Capa                | Tecnología                                                                |
+| ------------------- | ------------------------------------------------------------------------- |
+| Backend             | Node.js ≥ 18 + Express 4 (ES Modules, sin TypeScript)                     |
+| Base de datos       | MySQL 8.0.13+ (en producción, Aiven MySQL; Render no ofrece MySQL)        |
+| Sesiones            | express-session + express-mysql-session (tabla `sessions` en la misma BD) |
+| Driver MySQL        | mysql2 (pool de conexiones con keep-alive)                                |
+| Seguridad           | bcrypt (cost 10), helmet, cors, express-validator                         |
+| Configuración       | dotenv (`.env`, no versionado)                                            |
+| Frontend            | HTML5 + CSS3 + JavaScript vanilla (sin frameworks de UI)                  |
+| Estilos             | Bootstrap 5 + CSS propio (paleta rojo/blanco)                             |
+| Gráficos            | Chart.js (CDN)                                                            |
+| Iconos / tipografía | Bootstrap Icons (CDN) / Google Fonts Inter                                |
 
 ## 3. Estructura del proyecto
 
@@ -147,18 +153,20 @@ En el frontend, cada página carga primero `api.js`, `ui.js` y `layout.js`
 
 ### 4.3 Flujo de una incidencia (paso a paso)
 
-1. **Crear** (`CREAR_INCIDENCIA`): el formulario pide tipo de centro, centro,
-   sistema, tipo de incidencia, ticket (único), responsable (texto libre) y
-   descripción. El backend guarda `usuario_id = sesión` (nunca del body) y deja
-   que MySQL rellene `fecha`, `hora_inicio`, `creado_en` y `actualizado_en`;
-   `hora_fin` y `tiempo_solucion` quedan en NULL.
-2. **Listar/filtrar** (`VER_INCIDENCIAS`): filtros por rango de fechas, tipo de
-   centro, estado (abierta/cerrada), `usuario_id`, responsable (texto), centro,
-   sistema, tipo de incidencia y búsqueda libre sobre ticket/descripción.
-   Paginación de 10 filas; el listado y el total se calculan en paralelo.
+1. **Crear** (`CREAR_INCIDENCIAS`): el formulario pide centro, sistema, tipo de
+   incidencia, ticket (único), responsable (texto libre) y descripción. El
+   backend guarda `creado_por = sesión` (nunca del body) y deja que MySQL
+   rellene `fecha`, `hora_inicio`, `creado_en` y `actualizado_en`; `hora_fin` y
+   `tiempo_solucion` quedan en NULL.
+2. **Listar/filtrar** (`VER_INCIDENCIAS`): filtros por rango de fechas, centro,
+   sistema, incidencia, responsable, estado (abierta/cerrada), autor de registro
+   (`creado_por`) y búsqueda libre (`q` sobre ticket/descripción). Los filtros
+   de dimensión son **de igualdad exacta** para que el planner use los índices
+   compuestos; solo `q` usa `LIKE '%texto%'`. Paginación de 10 filas; el
+   listado, el total y el resumen por estado se calculan en paralelo.
 3. **Ver detalle** (ícono del ojo): datos generales, tiempos y quién registró la
    incidencia.
-4. **Modificar / cerrar** (`MODIFICAR_INCIDENCIA`): el modal permite editar los
+4. **Modificar / cerrar** (`MODIFICAR_INCIDENCIAS`): el modal permite editar los
    campos, la `fecha` y la `hora_inicio`.
    - Si la incidencia está **abierta**, al guardar se cierra: si se indica
      `hora_fin` se usa esa; si no, la hora actual del servidor. Se calcula
@@ -166,10 +174,9 @@ En el frontend, cada página carga primero `api.js`, `ui.js` y `layout.js`
      cruce de medianoche, se suma 24 h).
    - Si ya está **cerrada**, se puede **corregir la `hora_fin`** y el
      `tiempo_solucion` se recalcula.
-   - Si la cierra otro usuario, `usuario_id` pasa a ser quien cierra (nuevo
-     responsable funcional); el campo libre `responsable` **nunca** se modifica
-     al cerrar.
-5. **Eliminar** (`ELIMINAR_INCIDENCIA`): pide confirmación visual (`uiConfirmar`).
+   - Quien cierra queda como `actualizado_por` (la auditoría de la última
+     edición); el campo libre `responsable` **nunca** se modifica al cerrar.
+5. **Eliminar** (`ELIMINAR_INCIDENCIAS`): pide confirmación visual (`uiConfirmar`).
 6. **Autocompletado**: `GET /api/incidencias/valores-sugeridos` alimenta las
    listas de centro/sistema/incidencia/responsable; la "x" de cada sugerencia
    solo la oculta en memoria (si el valor vuelve a registrarse, reaparece).
@@ -178,36 +185,68 @@ En el frontend, cada página carga primero `api.js`, `ui.js` y `layout.js`
 
 - Módulo exclusivo: `VER_INCIDENCIAS` **no** da acceso al Dashboard.
 - Tarjetas KPI: total, abiertas, cerradas, tasa de resolución, tiempo promedio
-  de resolución, incidencias de hoy y usuarios registrados.
-- Gráficos: top 10 sistemas, tipo de centro, incidencias por centro
-  (abiertas/cerradas), tipo de incidencia y línea de tiempos de solución
-  (últimos 30 tickets) con badges de promedio/mínimo/máximo.
-- Filtro por rango de fechas (`fecha_desde` / `fecha_hasta`) que se aplica a
-  todos los datos. Al aplicar, limpiar o cambiar una fecha se recargan KPIs,
-  gráficos y la línea **en paralelo**.
-- El backend también expone `/por-dia`, `/por-responsable` y `/heatmap`,
-  disponibles para gráficos futuros.
+  y máximo de resolución, incidencias de hoy y centros distintos (los conteos
+  de sistemas, tipos y autores salen en el tooltip).
+- Gráficos: serie diaria creadas/cerradas, top 10 sistemas, estado
+  (abiertas/cerradas), incidencias por centro (apiladas abiertas/cerradas),
+  top tipos de incidencia, top responsables de negocio, top autores de registro
+  y línea de tiempos de solución (últimos 30 tickets) con badges de
+  promedio/mínimo/máximo.
+- Un único juego de filtros globales (fechas, centro, sistema, tipo de
+  incidencia, responsable, estado y autor) que se aplica a KPIs y gráficos. Al
+  cambiar cualquiera se recarga todo **en paralelo**; `cargarTodo()` evita
+  solapamientos para que Chart.js no intente repintar un canvas en uso.
+- Los desplegables de filtro se llenan desde `/dashboard/metadatos`, que
+  devuelve los valores que existen de verdad en la base más el rango de fechas
+  con datos: el frontend no duplica catálogos.
+- **Dos rankings distintos que no se mezclan**: `/por-responsable` es el
+  responsable de negocio (texto libre de la incidencia) y `/por-autor` es el
+  usuario del sistema que registró la fila (`creado_por`).
 
 ### 4.5 Usuarios, roles y permisos
 
-- **Usuarios** (`VER_USUARIOS`; crear/editar/borrar con `CREAR_USUARIO`):
-  alta con contraseña (bcrypt, cost 10), edición con contraseña opcional,
-  habilitar/deshabilitar, asignar/quitar roles (`ASIGNAR_ROLES`) y permisos
-  personalizados por usuario (`ASIGNAR_PERMISOS`, solo con rol PERSONALIZADO).
-- **Roles** (`VER_ROLES`; crear/editar/borrar con `CREAR_ROLES`): un rol es
-  SISTEMA (plantilla de permisos) o PERSONALIZADO (permisos por usuario). Al
-  cambiar el tipo se limpia la tabla de la lógica que deja de aplicar.
-- **Permisos** (`VER_PERMISOS`; crear/editar/borrar con `CREAR_PERMISOS`):
-  catálogo global y asignación a roles SISTEMA (Lógica A) y a pares
-  usuario-rol PERSONALIZADO (Lógica B).
+Cada operación tiene su propio permiso (antes el PATCH y el DELETE exigían el
+de crear, lo que dejaba cuentas sin capacidad real de edición ni borrado).
+
+- **Usuarios**: listar y ver detalle (`VER_USUARIOS`), crear
+  (`CREAR_USUARIOS`), editar (`MODIFICAR_USUARIOS`), borrar
+  (`ELIMINAR_USUARIOS`). Alta con contraseña (bcrypt, cost 10), edición con
+  contraseña opcional, habilitar/deshabilitar, asignar/quitar roles
+  (`ASIGNAR_ROLES`) y permisos personalizados (`ASIGNAR_PERMISOS`, solo con rol
+  PERSONALIZADO). El listado trae roles, conteos de incidencias creadas y
+  modificadas, y la auditoría. **No se puede borrar** un usuario con
+  incidencias asociadas (FK `ON DELETE RESTRICT`): el servicio lo impide con un
+  409 que sugiere deshabilitarlo en su lugar.
+- **Roles**: `VER_ROLES`, `CREAR_ROLES`, `MODIFICAR_ROLES`, `ELIMINAR_ROLES`. Un
+  rol es SISTEMA (plantilla de permisos) o PERSONALIZADO (permisos por
+  usuario). Al cambiar de tipo se limpia la tabla de la lógica que deja de
+  aplicar, y ese borrado va **en la misma transacción** que el `UPDATE`: si la
+  actualización fallara, el rol no habría perdido sus permisos sin haber
+  cambiado de tipo. Cada fila trae el número de usuarios, el de permisos de la
+  plantilla y su auditoría.
+  - `DELETE /api/roles/:id` **no comprueba quién lo tenía**: la FK
+    `usuarios_roles.rol_id` es `ON DELETE CASCADE`, así que el rol y sus
+    permisos desaparecen de golpe para todos sus usuarios. La UI avisa con el
+    número de usuarios afectados y pide confirmación, pero quien llame a la API
+    directamente se lleva el mismo borrado silencioso. Borrar el último rol que
+    tiene un administrador lo deja sin ningún permiso, y la única salida es
+    restaurar el rol por base de datos.
+- **Permisos**: `VER_PERMISOS`, `CREAR_PERMISOS`, `MODIFICAR_PERMISOS`,
+  `ELIMINAR_PERMISOS`. Catálogo global y asignación a roles SISTEMA (Lógica A)
+  y a pares usuario-rol PERSONALIZADO (Lógica B). Cada fila muestra cuántos
+  roles lo usan y cuántos usuarios lo tienen concedido o denegado.
 
 ### 4.6 Filtros de las tablas
 
-- Todas las tablas filtran **en vivo** (sin recargar y sin pulsar "Aplicar
-  Filtros", aunque el botón sigue disponible):
-  - **Incidencias**: los filtros viajan al backend y el listado se recarga.
-  - **Usuarios / Roles / Permisos**: filtrado en el cliente sobre los datos ya
-    cargados (texto, tipo, estado y rango de fechas).
+- Todas las tablas filtran **en vivo** (sin pulsar "Aplicar Filtros", aunque el
+  botón sigue disponible):
+  - **Incidencias y Usuarios**: los filtros y la ordenación viajan al backend y
+    el listado se recarga. En Usuarios, los cuatro campos de texto se unen en un
+    parámetro `q` y el orden sale de una lista blanca del servidor
+    (`alfabetico`, `usuario`, `reciente`, `antiguo`, `modificado`, `id`, …).
+  - **Roles**: el filtro de `tipo` va al servidor (`idx_roles_tipo`); nombre y
+    fechas se resuelven en el navegador, que es un catálogo pequeño.
+  - **Permisos**: filtrado en el cliente sobre el catálogo ya cargado.
 - El rango de fechas de Usuarios/Roles/Permisos es inclusivo y coincide si la
   **fecha de creación o la de última modificación** caen dentro del rango;
   admite solo "Desde", solo "Hasta" o ambos. "Limpiar" borra todos los filtros.
@@ -237,16 +276,16 @@ rol ADMINISTRADOR con todos los permisos y un usuario `admin` inicial.
 
 ### Variables de entorno (`backend/.env`)
 
-| Variable | Obligatoria | Descripción |
-|---|---|---|
-| `DB_HOST` | Sí | Host de MySQL (por defecto `127.0.0.1`). |
-| `DB_PORT` | Sí | Puerto de MySQL (por defecto `3306`). |
-| `DB_USER` / `DB_USERNAME` | Sí | Usuario de MySQL (se acepta cualquiera de los dos nombres). |
-| `DB_PASSWORD` | Sí | Contraseña de MySQL. |
-| `DB_NAME` | Sí | Nombre de la base (por defecto `bitacora_incidencias`). |
-| `SESSION_SECRET` | Recomendada | Secreto para firmar la cookie de sesión. Usa una cadena larga y aleatoria; cámbiala en producción. |
-| `PORT` | No | Puerto del servidor (por defecto `3000`). |
-| `NODE_ENV` | No | `production` activa cookies `secure`. |
+| Variable                  | Obligatoria | Descripción                                                                                        |
+| ------------------------- | ----------- | -------------------------------------------------------------------------------------------------- |
+| `DB_HOST`                 | Sí          | Host de MySQL (por defecto `127.0.0.1`).                                                           |
+| `DB_PORT`                 | Sí          | Puerto de MySQL (por defecto `3306`).                                                              |
+| `DB_USER` / `DB_USERNAME` | Sí          | Usuario de MySQL (se acepta cualquiera de los dos nombres).                                        |
+| `DB_PASSWORD`             | Sí          | Contraseña de MySQL.                                                                               |
+| `DB_NAME`                 | Sí          | Nombre de la base (por defecto `bitacora_incidencias`).                                            |
+| `SESSION_SECRET`          | Recomendada | Secreto para firmar la cookie de sesión. Usa una cadena larga y aleatoria; cámbiala en producción. |
+| `PORT`                    | No          | Puerto del servidor (por defecto `3000`).                                                          |
+| `NODE_ENV`                | No          | `production` activa cookies `secure`.                                                              |
 
 > `backend/.env` está en `.gitignore` y **nunca** debe versionarse.
 > En el repositorio solo vive `.env.example` con valores de ejemplo.
@@ -297,7 +336,7 @@ curl -s -b cookies.txt http://localhost:3000/api/dashboard/kpis
   que `backend/.env` no aparezca en `git ls-files`.
 - **Rotación de credenciales**: si una contraseña o host real llegó a
   commitearse, considera la credencial comprometida: cámbiala en el proveedor
-  (Aiven → usuario `avnadmin` → *Reset password*) y actualiza `.env` y las
+  (Aiven → usuario `avnadmin` → _Reset password_) y actualiza `.env` y las
   variables del despliegue.
 - **Contraseña del admin**: cámbiala tras el primer acceso (ver sección 8).
 - **Sesiones**: cookie `httpOnly`, `sameSite=lax`, `secure` en producción,
@@ -305,8 +344,11 @@ curl -s -b cookies.txt http://localhost:3000/api/dashboard/kpis
 - **Contraseñas**: siempre hasheadas con bcrypt (cost 10); nunca en texto plano.
 - **SQL**: todas las consultas usan parámetros preparados (`?`); no se
   concatenan datos del usuario.
-- **Validación**: `express-validator` valida altas y modificaciones (fechas,
-  horas, longitudes, enums de tipo de centro, etc.).
+- **Validación**: `express-validator` valida cuerpo, query y parámetros de ruta,
+  y `checkValidation` (`middlewares/validacion.js`) corta la petición con
+  `400 { ok: false, mensaje, errors }` antes de tocar la base de datos. Es
+  **fail-closed**: un id mal formado no llega al servicio. Cubre fechas, horas,
+  longitudes, enums (`tipo`, `estado`), arrays de ids y rangos de paginación.
 - **Cabeceras y CORS**: `helmet` y `cors` configurados en `server.js`; la
   política CSP queda desactivada porque la UI usa CDNs (Bootstrap, Chart.js,
   Google Fonts).
@@ -321,98 +363,119 @@ activa y el permiso listado (`requirePermission`).
 
 ### Autenticación
 
-| Método | Ruta | Permiso | Descripción |
-|---|---|---|---|
-| POST | `/api/auth/login` | público | Valida credenciales y crea la sesión. Devuelve usuario, roles y permisos. |
-| POST | `/api/auth/logout` | sesión | Destruye la sesión y limpia la cookie. |
-| GET | `/api/auth/me` | sesión | Usuario, roles y permisos efectivos de la sesión. |
+| Método | Ruta               | Permiso | Descripción                                                               |
+| ------ | ------------------ | ------- | ------------------------------------------------------------------------- |
+| POST   | `/api/auth/login`  | público | Valida credenciales y crea la sesión. Devuelve usuario, roles y permisos. |
+| POST   | `/api/auth/logout` | sesión  | Destruye la sesión y limpia la cookie.                                    |
+| GET    | `/api/auth/me`     | sesión  | Usuario, roles y permisos efectivos de la sesión.                         |
 
 ### Usuarios (`/api/usuarios`)
 
-| Método | Ruta | Permiso | Descripción |
-|---|---|---|---|
-| GET | `/` | `VER_USUARIOS` | Lista usuarios con su array de roles (sin N+1). |
-| POST | `/` | `CREAR_USUARIO` | Crea usuario (contraseña ≥ 6, bcrypt). |
-| PATCH | `/:id` | `CREAR_USUARIO` | Actualiza campos y, opcionalmente, la contraseña. |
-| DELETE | `/:id` | `CREAR_USUARIO` | Elimina un usuario. |
-| GET | `/:id/roles` | `VER_USUARIOS` o `ASIGNAR_ROLES` o `ASIGNAR_PERMISOS` | Roles del usuario. |
-| POST | `/:id/roles` | `ASIGNAR_ROLES` | Asigna un rol (idempotente). |
-| DELETE | `/:id/roles/:rid` | `ASIGNAR_ROLES` | Quita un rol (sus permisos personalizados caen en cascada). |
-| GET | `/:id/permisos-personalizados` | `ASIGNAR_PERMISOS` | Resuelve el rol PERSONALIZADO y sus permisos (Lógica B). |
-| POST | `/:id/permisos-personalizados` | `ASIGNAR_PERMISOS` | Reemplaza los permisos personalizados del usuario. |
-| DELETE | `/:id/permisos-personalizados/:pid` | `ASIGNAR_PERMISOS` | Quita un permiso personalizado. |
-| GET | `/:uid/roles/:rid/permisos` | `ASIGNAR_PERMISOS` | Permisos concedidos del par (usuario, rol). |
-| POST | `/:uid/roles/:rid/permisos` | `ASIGNAR_PERMISOS` | Reemplaza los permisos del par (usuario, rol). |
-| DELETE | `/:uid/roles/:rid/permisos/:pid` | `ASIGNAR_PERMISOS` | Quita un permiso del par (usuario, rol). |
+| Método | Ruta                                | Permiso                                               | Descripción                                                                                                |
+| ------ | ----------------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| GET    | `/`                                 | `VER_USUARIOS`                                        | Lista usuarios con roles, conteos de incidencias y auditoría. Acepta `q`, `rol`, `estado`, `orden`, `asc`. |
+| GET    | `/:id`                              | `VER_USUARIOS`                                        | Detalle del usuario con roles, conteos y auditoría.                                                        |
+| POST   | `/`                                 | `CREAR_USUARIOS`                                      | Crea usuario (contraseña ≥ 6, bcrypt).                                                                     |
+| PATCH  | `/:id`                              | `MODIFICAR_USUARIOS`                                  | Actualiza campos y, opcionalmente, la contraseña.                                                          |
+| DELETE | `/:id`                              | `ELIMINAR_USUARIOS`                                   | Elimina un usuario.                                                                                        |
+| GET    | `/:id/roles`                        | `VER_USUARIOS` o `ASIGNAR_ROLES` o `ASIGNAR_PERMISOS` | Roles del usuario.                                                                                         |
+| POST   | `/:id/roles`                        | `ASIGNAR_ROLES`                                       | Asigna un rol (idempotente).                                                                               |
+| DELETE | `/:id/roles/:rid`                   | `ASIGNAR_ROLES`                                       | Quita un rol (sus permisos personalizados caen en cascada).                                                |
+| GET    | `/:id/permisos-personalizados`      | `ASIGNAR_PERMISOS`                                    | Resuelve el rol PERSONALIZADO y sus permisos (Lógica B).                                                   |
+| POST   | `/:id/permisos-personalizados`      | `ASIGNAR_PERMISOS`                                    | Reemplaza los permisos personalizados del usuario.                                                         |
+| DELETE | `/:id/permisos-personalizados/:pid` | `ASIGNAR_PERMISOS`                                    | Quita un permiso personalizado.                                                                            |
+| GET    | `/:uid/roles/:rid/permisos`         | `ASIGNAR_PERMISOS`                                    | Permisos concedidos del par (usuario, rol).                                                                |
+| POST   | `/:uid/roles/:rid/permisos`         | `ASIGNAR_PERMISOS`                                    | Reemplaza los permisos del par (usuario, rol).                                                             |
+| DELETE | `/:uid/roles/:rid/permisos/:pid`    | `ASIGNAR_PERMISOS`                                    | Quita un permiso del par (usuario, rol).                                                                   |
 
 ### Roles (`/api/roles`)
 
-| Método | Ruta | Permiso | Descripción |
-|---|---|---|---|
-| GET | `/` | `VER_ROLES` | Lista roles. |
-| POST | `/` | `CREAR_ROLES` | Crea rol (SISTEMA o PERSONALIZADO). |
-| PATCH | `/:id` | `CREAR_ROLES` | Edita nombre/tipo; al cambiar de tipo limpia la tabla de la lógica anterior. |
-| DELETE | `/:id` | `CREAR_ROLES` | Elimina rol. |
-| GET | `/:id/permisos` | `VER_ROLES` o `ASIGNAR_PERMISOS` | Plantilla de permisos del rol (Lógica A). |
-| POST | `/:id/permisos` | `ASIGNAR_PERMISOS` | Reemplaza la plantilla (solo roles SISTEMA). |
-| DELETE | `/:id/permisos/:pid` | `ASIGNAR_PERMISOS` | Quita un permiso de la plantilla. |
-| GET | `/:id/usuarios` | `VER_ROLES` o `ASIGNAR_ROLES` | Usuarios con ese rol. |
+| Método | Ruta                 | Permiso                          | Descripción                                                                                                                      |
+| ------ | -------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/`                  | `VER_ROLES`                      | Lista roles.                                                                                                                     |
+| POST   | `/`                  | `CREAR_ROLES`                    | Crea rol (SISTEMA o PERSONALIZADO).                                                                                              |
+| PATCH  | `/:id`               | `MODIFICAR_ROLES`                | Edita nombre/tipo (solo los campos enviados); al cambiar de tipo limpia la tabla de la lógica anterior, en la misma transacción. |
+| DELETE | `/:id`               | `ELIMINAR_ROLES`                 | Elimina rol.                                                                                                                     |
+| GET    | `/:id/permisos`      | `VER_ROLES` o `ASIGNAR_PERMISOS` | Plantilla de permisos del rol (Lógica A).                                                                                        |
+| POST   | `/:id/permisos`      | `ASIGNAR_PERMISOS`               | Reemplaza la plantilla (solo roles SISTEMA).                                                                                     |
+| DELETE | `/:id/permisos/:pid` | `ASIGNAR_PERMISOS`               | Quita un permiso de la plantilla.                                                                                                |
+| GET    | `/:id/usuarios`      | `VER_ROLES` o `ASIGNAR_ROLES`    | Usuarios con ese rol.                                                                                                            |
 
 ### Permisos (`/api/permisos`)
 
-| Método | Ruta | Permiso | Descripción |
-|---|---|---|---|
-| GET | `/` | `VER_PERMISOS` | Catálogo completo de permisos. |
-| POST | `/` | `CREAR_PERMISOS` | Crea permiso (nombre único). |
-| PATCH | `/:id` | `CREAR_PERMISOS` | Renombra permiso. |
-| DELETE | `/:id` | `CREAR_PERMISOS` | Elimina permiso (asignaciones en cascada). |
-| POST | `/:uid/roles/:rid/permisos` | `ASIGNAR_PERMISOS` | Asigna permisos al par (usuario, rol) PERSONALIZADO. |
+| Método | Ruta                        | Permiso              | Descripción                                          |
+| ------ | --------------------------- | -------------------- | ---------------------------------------------------- |
+| GET    | `/`                         | `VER_PERMISOS`       | Catálogo completo de permisos.                       |
+| POST   | `/`                         | `CREAR_PERMISOS`     | Crea permiso (nombre único).                         |
+| PATCH  | `/:id`                      | `MODIFICAR_PERMISOS` | Renombra permiso.                                    |
+| DELETE | `/:id`                      | `ELIMINAR_PERMISOS`  | Elimina permiso (asignaciones en cascada).           |
+| POST   | `/:uid/roles/:rid/permisos` | `ASIGNAR_PERMISOS`   | Asigna permisos al par (usuario, rol) PERSONALIZADO. |
 
 ### Incidencias (`/api/incidencias`)
 
-| Método | Ruta | Permiso | Descripción |
-|---|---|---|---|
-| GET | `/` | `VER_INCIDENCIAS` | Listado con filtros y paginación (`page`, `limit`). |
-| GET | `/valores-sugeridos` | `VER_INCIDENCIAS` | Valores distintos para autocompletado. |
-| GET | `/:id` | `VER_INCIDENCIAS` | Detalle de una incidencia. |
-| POST | `/` | `CREAR_INCIDENCIA` | Alta; `usuario_id = sesión`; `fecha`/`hora_inicio` por MySQL. |
-| PATCH | `/:id` | `MODIFICAR_INCIDENCIA` | Edita campos, `fecha` y `hora_inicio`; cierra con `{ cerrar: true }`; corrige `hora_fin` si ya está cerrada (recalcula `tiempo_solucion`). |
-| PATCH | `/:id/cerrar` | `MODIFICAR_INCIDENCIA` | Cierre directo con la hora del servidor. |
-| DELETE | `/:id` | `ELIMINAR_INCIDENCIA` | Elimina incidencia. |
+| Método | Ruta                 | Permiso                 | Descripción                                                                                                                                |
+| ------ | -------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| GET    | `/`                  | `VER_INCIDENCIAS`       | Listado con filtros y paginación (`page`, `limit`).                                                                                        |
+| GET    | `/valores-sugeridos` | `VER_INCIDENCIAS`       | Valores distintos para autocompletado.                                                                                                     |
+| GET    | `/:id`               | `VER_INCIDENCIAS`       | Detalle de una incidencia.                                                                                                                 |
+| POST   | `/`                  | `CREAR_INCIDENCIAS`     | Alta; `creado_por = sesión`; `fecha`/`hora_inicio` por MySQL.                                                                              |
+| PATCH  | `/:id`               | `MODIFICAR_INCIDENCIAS` | Edita campos, `fecha` y `hora_inicio`; cierra con `{ cerrar: true }`; corrige `hora_fin` si ya está cerrada (recalcula `tiempo_solucion`). |
+| PATCH  | `/:id/cerrar`        | `MODIFICAR_INCIDENCIAS` | Cierre directo con la hora del servidor.                                                                                                   |
+| DELETE | `/:id`               | `ELIMINAR_INCIDENCIAS`  | Elimina incidencia.                                                                                                                        |
 
 Parámetros de filtro del listado: `fecha_desde`, `fecha_hasta`, `centro`,
-`tipo_centro`, `sistema`, `incidencia`, `usuario_id`, `responsable_texto`,
-`estado` (`abierta`|`cerrada`), `q` (ticket/descripción), `page`, `limit`.
+`sistema`, `incidencia`, `responsable`, `estado` (`abierta`|`cerrada`),
+`creado_por` (autor de registro), `q` (ticket/descripción), `orden` (lista
+blanca: `reciente`, `antiguo`, `fecha`, `centro`, `sistema`, `estado`,
+`responsable`, `tiempo`, `id`), `asc`, `page`, `limit`. Un orden fuera de la lista blanca se descarta y cae en
+el orden por defecto, así que nunca llega a la consulta. La respuesta trae
+`pagination: { page, limit, total, totalPages }`, `filtros_aplicados` y
+`estado: { total, abiertas, cerradas }`, de modo que las pills de resumen se
+pintan sin una segunda petición.
 
 ### Dashboard (`/api/dashboard`, todas exigen `VER_DASHBOARD`)
 
-| Método | Ruta | Descripción |
-|---|---|---|
-| GET | `/kpis` | Total, abiertas, cerradas, tasa de resolución, tiempo promedio, hoy y usuarios. |
-| GET | `/por-sistema` | Top 10 sistemas con más incidencias. |
-| GET | `/por-tipo-centro` | Distribución DISTRIBUCION vs TRANSFERENCIA. |
-| GET | `/por-centro` | Incidencias por centro (abiertas/cerradas). |
-| GET | `/por-tipo-incidencia` | Incidencias por tipo. |
-| GET | `/por-tiempo-solucion` | Serie de tiempos (`limite`, por defecto 30) + promedio/mínimo/máximo. |
-| GET | `/por-dia` | Creadas/cerradas por día (disponible para gráficos futuros). |
-| GET | `/por-responsable` | Top responsables por `usuario_id` (disponible). |
-| GET | `/heatmap` | Matriz día de la semana × hora (disponible). |
+| Método | Ruta                   | Descripción                                                                     |
+| ------ | ---------------------- | ------------------------------------------------------------------------------- |
+| GET    | `/kpis`                | Total, abiertas, cerradas, tasa de resolución, tiempo promedio, hoy y usuarios. |
+| GET    | `/por-sistema`         | Top 10 sistemas con más incidencias.                                            |
+| GET    | `/por-estado`          | Abiertas vs cerradas.                                                           |
+| GET    | `/por-centro`          | Incidencias por centro (apiladas abiertas/cerradas).                            |
+| GET    | `/por-tipo-incidencia` | Incidencias por tipo.                                                           |
+| GET    | `/por-responsable`     | Top del responsable de negocio (texto libre).                                   |
+| GET    | `/por-autor`           | Top del autor de registro (`creado_por`).                                       |
+| GET    | `/por-tiempo-solucion` | Serie de tiempos (`limite`, por defecto 30) + promedio/mínimo/máximo.           |
+| GET    | `/por-dia`             | Creadas/cerradas por día (`dias`, por defecto 30).                              |
+| GET    | `/metadatos`           | Filtros: valores existentes de cada dimensión + rango con datos.                |
+| GET    | `/heatmap`             | Matriz día de la semana × hora (disponible para uso futuro).                    |
 
-Los endpoints del dashboard aceptan `fecha_desde` y `fecha_hasta`
-(`YYYY-MM-DD`); si el rango viene invertido se corrige automáticamente.
+Los endpoints del dashboard aceptan los mismos filtros globales que la web
+(`fecha_desde`, `fecha_hasta`, `centro`, `sistema`, `incidencia`,
+`responsable`, `estado`, `creado_por`); si el rango viene invertido se corrige
+automáticamente.
+
+Formatos de respuesta:
+
+- Rankings por dimensión (`por-sistema`, `por-centro`, `por-tipo-incidencia`,
+  `por-responsable`, `por-estado`): `[{ etiqueta, total, abiertas, cerradas }]`,
+  con `etiqueta` en el idioma del dominio (p. ej. `ABIERTA`/`CERRADA`) y no el
+  código crudo de la base.
+- `por-autor`: `[{ id, usuario, nombre, total, abiertas, cerradas }]`, porque
+  el autor es un usuario del sistema y necesita su id, no una etiqueta.
+- `por-dia`: `[{ fecha, creadas, cerradas, promedio_minutos }]`.
 
 ## 11. Modelo de datos
 
-| Tabla | Rol |
-|---|---|
-| `usuarios` | Cuentas del sistema (bcrypt, habilitado, `creado_en`/`actualizado_en`). |
-| `roles` | Catálogo de roles con discriminador `tipo` (`SISTEMA`/`PERSONALIZADO`). |
-| `permisos` | Catálogo de permisos (`VER_*`, `CREAR_*`, `ASIGNAR_*`, …). |
-| `usuarios_roles` | Asignación usuario ↔ rol (N:M). |
-| `roles_permisos` | Lógica A: plantilla de permisos de un rol SISTEMA. |
-| `usuarios_roles_permisos` | Lógica B: permisos por par (usuario, rol) con `concedido`. |
-| `incidencias` | Bitácora: datos del ticket, tiempos y `usuario_id` responsable funcional. |
-| `sessions` | La crea y mantiene `express-mysql-session` (sesiones de la app). |
+| Tabla                     | Rol                                                                                                               |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `usuarios`                | Cuentas del sistema (bcrypt, habilitado) con auditoría `creado_por`/`actualizado_por`.                            |
+| `roles`                   | Catálogo de roles con discriminador `tipo` (`SISTEMA`/`PERSONALIZADO`) y auditoría.                               |
+| `permisos`                | Catálogo de permisos (`VER_*`, `CREAR_*`, `MODIFICAR_*`, `ELIMINAR_*`, `ASIGNAR_*`) con auditoría.                |
+| `usuarios_roles`          | Asignación usuario ↔ rol (N:M).                                                                                   |
+| `roles_permisos`          | Lógica A: plantilla de permisos de un rol SISTEMA.                                                                |
+| `usuarios_roles_permisos` | Lógica B: permisos por par (usuario, rol) con `concedido`.                                                        |
+| `incidencias`             | Bitácora: datos del ticket y tiempos, con `responsable` de negocio y `creado_por`/`actualizado_por` de auditoría. |
+| `sessions`                | La crea y mantiene `express-mysql-session` (sesiones de la app).                                                  |
 
 Notas:
 
@@ -420,12 +483,28 @@ Notas:
   incidencias (`TIMESTAMP(6)` con `DEFAULT` y `ON UPDATE`).
 - `incidencias.fecha` y `hora_inicio` se rellenan en MySQL al insertar
   (`DEFAULT (CURRENT_DATE)` / `DEFAULT (CURRENT_TIME)`).
-- Índices de apoyo en incidencias: `idx_incidencias_fecha`,
-  `idx_incidencias_centro`, `idx_incidencias_sistema`.
-- El campo `responsable` (texto libre) es informativo: **no** participa en la
-  reasignación; el responsable funcional es `usuario_id`.
-- Los listados y el dashboard que muestran "quién atiende" usan `usuario_id`
-  con JOIN a `usuarios` (nombre + apellido).
+- Índices de apoyo: los compuestos que cubren cada filtro del dashboard
+  (`idx_incidencias_fecha_tipo`, `idx_incidencias_centro_fecha`,
+  `idx_incidencias_sistema_fecha`, `idx_incidencias_responsable_fecha`,
+  `idx_incidencias_hora_fin_fecha`), los de FK de auditoría y, para los
+  catálogos, `idx_roles_tipo` (filtro por tipo) e
+  `idx_usuarios_habilitado_nombre` (listado alfabético). Las tablas pivote
+  llevan índices inversos para responder "¿qué roles tienen este permiso?" o
+  "¿qué usuarios tienen este rol?" sin escanear.
+- **Los ids son `BIGINT` AUTO_INCREMENT** en todas las tablas. JavaScript solo es
+  exacto hasta `Number.MAX_SAFE_INTEGER` (2^53−1) y mysql2 entrega como `string`
+  cualquier `BIGINT` que no quepa en un número, de modo que un id grande nunca
+  se trunca en silencio; el frontend normaliza con `Number(...)` al comparar
+  contra los ids que le llegan de la API.
+- Los ids de ruta se validan con `idNumerico()`, que exige un entero positivo
+  dentro del rango seguro antes de que la consulta llegue al servicio.
+- `responsable` es el **responsable de negocio** (texto libre, informativo). No
+  es el usuario del sistema: ese es `creado_por`, y el dashboard los muestra en
+  rankings separados (`/por-responsable` y `/por-autor`).
+- La auditoría se firma con `req.session.userId`. `creado_por` y
+  `actualizado_por` son columnas que **el cliente no puede escribir**: el
+  servicio los fuerza a partir de la sesión aunque el body los incluya, y las
+  rutas los rechazan en validación.
 
 ## 12. Rendimiento
 
@@ -437,23 +516,29 @@ viajes** y **paralelizar lo independiente**:
   (UNION): afecta a todas las peticiones protegidas, al login y a `/auth/me`.
 - Los KPIs del dashboard se obtienen con **una consulta** con agregados
   condicionales (antes eran cinco consultas en serie).
-- Listado de incidencias (filas + total), listado de usuarios (usuarios + roles),
-  serie y estadísticas de tiempos, login y `/auth/me` ejecutan sus consultas
-  **en paralelo** con `Promise.all`.
+- Listado de incidencias (filas + total + resumen por estado), listado de
+  usuarios (usuarios + roles), serie y estadísticas de tiempos, login y
+  `/auth/me` ejecutan sus consultas **en paralelo** con `Promise.all`.
+- `GET /api/usuarios` resuelve en **una sola ida** al pool: los roles de todos
+  los usuarios llegan agrupados por `usuario_id` y se reensamblan en memoria, en
+  lugar de una consulta por usuario (N+1).
 - El cierre/corrección de incidencias resuelve hora de fin y `tiempo_solucion`
   en una única consulta.
 - El pool MySQL usa `enableKeepAlive` para evitar reconexiones (handshake
   TCP/TLS) cuando la base cierra conexiones inactivas.
-- El frontend: el dashboard lanza sus 6 peticiones **en paralelo**; incidencias
-  (sugerencias + listado) y usuarios (roles + usuarios) también; y cada página
-  hace **una sola** llamada a `/api/auth/me` por carga.
+- El frontend: el dashboard lanza sus 10 peticiones **en paralelo** desde
+  `cargarTodo()` (metadatos, KPIs, serie de tiempos y los 7 gráficos), con un
+  flag que corta el ciclo si el usuario sigue cambiando filtros —sin él dos
+  renders simultáneos dejan un canvas en uso y Chart.js lanza error—;
+  incidencias (sugerencias + listado) y usuarios (catálogos + listado) también,
+  y cada página hace **una sola** llamada a `/api/auth/me` por carga.
 - El despliegue en Render se configura en **Fráncfort** (`render.yml`) para
   quedar junto a la base y eliminar la mayor parte de la latencia de red.
 
 ## 13. Despliegue en Render
 
 El Blueprint está en `backend/render.yml`. En Render: **New → Blueprint**,
-apuntar al repositorio e indicar `backend/render.yml` como *Blueprint file path*.
+apuntar al repositorio e indicar `backend/render.yml` como _Blueprint file path_.
 
 Configuración del servicio:
 
@@ -484,6 +569,17 @@ nunca en el YAML ni en el repositorio (`render.yml` las declara con
   en línea salvo casos puntuales.
 - **Comentarios**: cada archivo documenta su responsabilidad y sus reglas
   críticas en la cabecera; mantén ese estilo al tocar código.
-- **Fechas mostradas**: usa `formatFechaHora()` (fecha corta local) en las
-  tablas; los filtros de rango comparan en fecha local con
-  `fechaDentroDeRango()` (`api.js`).
+- **Auditoría**: nunca escribas `creado_por`/`actualizado_por` a mano; toma el
+  id de `req.session.userId` en el servicio y deja la columna fuera del cuerpo
+  que acepta el cliente.
+- **Transacciones**: las operaciones de varios pasos (cambio de tipo de rol,
+  reemplazo de plantillas de permisos, permisos personalizados) van dentro de
+  `withTransaction()` de `config/db.js`. Una transacción que solo hace
+  `COMMIT` sin `try/catch` no protege nada.
+- **Fechas mostradas**: usa `formatearFechaHora()` (fecha y hora local) en las
+  tablas de auditoría; los filtros de rango comparan en fecha local con
+  `fechaDentroDeRango()` (`api.js`). El pool usa `dateStrings` para los `DATE`,
+  así que llegan como `YYYY-MM-DD` y no se reinterpretan por zona horaria.
+- **Escapado**: todo valor que venga del servidor y se pinte en `innerHTML`
+  pasa por `escaparHtml()`; `showToast()` ya escapa por ti, así que no le
+  pases HTML.

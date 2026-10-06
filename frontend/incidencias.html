@@ -101,7 +101,7 @@
                     </button>
                 </div>
 
-                <div class="card mb-4">
+                <div class="card mb-3">
                     <div class="card-header bg-light">
                         <i class="bi bi-funnel"></i> <strong>Filtros</strong>
                     </div>
@@ -115,15 +115,7 @@
                                 <label class="form-label form-label-sm">Hasta</label>
                                 <input type="date" class="form-control form-control-sm" id="filtroHasta">
                             </div>
-                            <div class="col-md-2">
-                                <label class="form-label form-label-sm">Tipo Centro</label>
-                                <select class="form-select form-select-sm" id="filtroTipoCentro">
-                                    <option value="">Todos</option>
-                                    <option value="DISTRIBUCION">Distribución</option>
-                                    <option value="TRANSFERENCIA">Transferencia</option>
-                                </select>
-                            </div>
-                            <div class="col-md-2">
+                            <div class="col-6 col-md-4 col-lg-2">
                                 <label class="form-label form-label-sm">Estado</label>
                                 <select class="form-select form-select-sm" id="filtroEstado">
                                     <option value="">Todos</option>
@@ -131,37 +123,62 @@
                                     <option value="cerrada">Cerrada</option>
                                 </select>
                             </div>
-                            <div class="col-md-2">
-                                <label class="form-label form-label-sm">Usuario</label>
-                                <input type="number" class="form-control form-control-sm" id="filtroUsuarioId"
-                                    placeholder="ID">
+                            <div class="col-6 col-md-4 col-lg-2">
+                                <label class="form-label form-label-sm">Ordenar por</label>
+                                <select class="form-select form-select-sm" id="filtroOrden">
+                                    <option value="fecha_desc">Fecha (más reciente)</option>
+                                    <option value="fecha_asc">Fecha (más antigua)</option>
+                                    <option value="creado_en_desc">Alta (más reciente)</option>
+                                    <option value="creado_en_asc">Alta (más antigua)</option>
+                                    <option value="actualizado_en_desc">Última modificación</option>
+                                    <option value="ticket_asc">Ticket (A-Z)</option>
+                                    <option value="centro_asc">Centro (A-Z)</option>
+                                    <option value="sistema_asc">Sistema (A-Z)</option>
+                                    <option value="incidencia_asc">Tipo de incidencia (A-Z)</option>
+                                    <option value="responsable_asc">Responsable (A-Z)</option>
+                                    <option value="hora_inicio_desc">Hora de inicio</option>
+                                    <option value="hora_fin_desc">Hora de cierre</option>
+                                    <option value="tiempo_solucion_desc">Tiempo de solución</option>
+                                    <option value="creado_por_asc">Registrado por</option>
+                                </select>
                             </div>
-                            <div class="col-md-2">
-                                <label class="form-label form-label-sm">Responsable</label>
-                                <input type="text" class="form-control form-control-sm" id="filtroRespTexto"
-                                    placeholder="Texto">
+                            <div class="col-6 col-md-4 col-lg-2">
+                                <label class="form-label form-label-sm">Registrado por</label>
+                                <select class="form-select form-select-sm" id="filtroCreadoPor">
+                                    <option value="">Todos</option>
+                                </select>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-6 col-md-4 col-lg-2">
                                 <label class="form-label form-label-sm">Centro</label>
                                 <input type="text" class="form-control form-control-sm" id="filtroCentro"
-                                    placeholder="Buscar centro">
+                                    list="listaCentros" placeholder="Centro">
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-6 col-md-4 col-lg-2">
                                 <label class="form-label form-label-sm">Sistema</label>
                                 <input type="text" class="form-control form-control-sm" id="filtroSistema"
-                                    placeholder="Buscar sistema">
+                                    list="listaSistemas" placeholder="Sistema">
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-6 col-md-4 col-lg-2">
                                 <label class="form-label form-label-sm">Incidencia</label>
                                 <input type="text" class="form-control form-control-sm" id="filtroIncidencia"
-                                    placeholder="Tipo incidencia">
+                                    list="listaIncidencias" placeholder="Incidencia">
                             </div>
-                            <div class="col-md-3">
-                                <label class="form-label form-label-sm">Buscar (Ticket/Descripción)</label>
+                            <div class="col-6 col-md-4 col-lg-2">
+                                <label class="form-label form-label-sm">Responsable</label>
+                                <input type="text" class="form-control form-control-sm" id="filtroRespTexto"
+                                    list="listaResponsables" placeholder="Responsable">
+                            </div>
+                            <div class="col-6 col-md-4 col-lg-2">
+                                <label class="form-label form-label-sm">Buscar</label>
                                 <input type="text" class="form-control form-control-sm" id="filtroQ"
-                                    placeholder="Buscar...">
+                                    placeholder="Buscar ticket...">
                             </div>
                         </div>
+                        <datalist id="listaCentros"></datalist>
+                        <datalist id="listaSistemas"></datalist>
+                        <datalist id="listaIncidencias"></datalist>
+                        <datalist id="listaResponsables"></datalist>
+
                         <div class="mt-3">
                             <button class="btn btn-danger btn-sm" id="btnFiltrar">Aplicar Filtros</button>
                             <button class="btn btn-secondary btn-sm" id="btnLimpiar">Limpiar</button>
@@ -176,28 +193,33 @@
                                 <thead class="bg-danger text-white">
                                     <tr>
                                         <th>ID</th>
-                                        <th> Ticketㅤㅤㅤ</th>
+                                        <th> Ticket</th>
                                         <th class="no-recorta">Fecha</th>
                                         <th class="no-recorta">Inicio</th>
                                         <th class="no-recorta">Fin</th>
-                                        <th>Centroㅤㅤㅤ</th>
+                                        <th>Centro</th>
                                         <th class="no-recorta">Sistema</th>
                                         <th>Incidencia</th>
                                         <th>Responsable</th>
+                                        <th>Descripción</th>
                                         <th>Estado</th>
                                         <th>Solución</th>
+                                        <th>Creado por</th>
+                                        <th>Modificado por</th>
+                                        <th>Creado en</th>
+                                        <th>Modificado en</th>
                                         <th>Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody id="tablaIncidenciasBody"></tbody>
                             </table>
                         </div>
+                        <div class="d-flex flex-wrap gap-3 small text-muted" id="resumenEstados"></div>
                         <nav>
                             <ul class="pagination" id="paginacion"></ul>
                         </nav>
                     </div>
                 </div>
-
                 <footer class="ui-footer mt-4">
                     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
                         <span class="ui-footer__marca">
@@ -222,14 +244,6 @@
                 <div class="modal-body">
                     <form id="formIncidencia" novalidate>
                         <div class="row g-3">
-                            <div class="col-md-6">
-                                <label class="form-label">Tipo Centro *</label>
-                                <select class="form-select" id="tipoCentro" required>
-                                    <option value="">Seleccionar...</option>
-                                    <option value="DISTRIBUCION">DISTRIBUCION</option>
-                                    <option value="TRANSFERENCIA">TRANSFERENCIA</option>
-                                </select>
-                            </div>
                             <div class="col-md-6">
                                 <label class="form-label">Centro *</label>
                                 <input type="text" class="form-control" id="centro" required>
@@ -288,6 +302,9 @@
                     <h6 class="text-uppercase text-muted small fw-bold mb-2">Datos de la incidencia</h6>
                     <div class="row g-3 mb-4" id="detalleDatos"></div>
 
+                    <h6 class="text-uppercase text-muted small fw-bold mb-2">Auditoría</h6>
+                    <div class="row g-3 mb-4" id="detalleAuditoria"></div>
+
                     <h6 class="text-uppercase text-muted small fw-bold mb-2">Tiempos</h6>
                     <div class="row g-3 mb-4" id="detalleTiempos"></div>
 
@@ -315,13 +332,6 @@
                 <div class="modal-body">
                     <input type="hidden" id="editarId">
                     <div class="row g-3">
-                        <div class="col-md-6">
-                            <label class="form-label">Tipo Centro *</label>
-                            <select class="form-select" id="editarTipoCentro" required>
-                                <option value="DISTRIBUCION">DISTRIBUCION</option>
-                                <option value="TRANSFERENCIA">TRANSFERENCIA</option>
-                            </select>
-                        </div>
                         <div class="col-md-6">
                             <label class="form-label">Ticket *</label>
                             <input type="text" class="form-control" id="editarTicket" maxlength="59" required>
@@ -363,7 +373,8 @@
                         <div class="col-md-4">
                             <label class="form-label">Hora de fin</label>
                             <input type="time" class="form-control" id="editarHoraFin">
-                            <div class="form-text" id="editarHoraFinAyuda">Si la dejas vacía se usa la hora actual del servidor.</div>
+                            <div class="form-text" id="editarHoraFinAyuda">Si la dejas vacía se usa la hora actual del
+                                servidor.</div>
                         </div>
                     </div>
                     <div id="editarCerrarAviso" class="alert alert-success py-2 mb-0">

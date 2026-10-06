@@ -54,7 +54,7 @@ function buildSidebar() {
   const menuItems = [];
 
   // Dashboard: visible solo con VER_DASHBOARD
-  if (hasPermission('VER_DASHBOARD')) {
+  if (hasPermission(PERMISOS.DASHBOARD.VER)) {
     menuItems.push({
       href: 'dashboard.html',
       icon: 'bi-speedometer2',
@@ -63,7 +63,7 @@ function buildSidebar() {
   }
 
   // Incidencias
-  if (hasPermission('VER_INCIDENCIAS', 'CREAR_INCIDENCIA', 'MODIFICAR_INCIDENCIA', 'ELIMINAR_INCIDENCIA')) {
+  if (hasPermission(PERMISOS.INCIDENCIAS.VER, PERMISOS.INCIDENCIAS.CREAR, PERMISOS.INCIDENCIAS.MODIFICAR, PERMISOS.INCIDENCIAS.ELIMINAR)) {
     menuItems.push({
       href: 'incidencias.html',
       icon: 'bi-journal-text',
@@ -72,7 +72,7 @@ function buildSidebar() {
   }
 
   // Usuarios
-  if (hasPermission('VER_USUARIOS', 'CREAR_USUARIO', 'ASIGNAR_ROLES', 'ASIGNAR_PERMISOS')) {
+  if (hasPermission(PERMISOS.USUARIOS.VER, PERMISOS.USUARIOS.CREAR, PERMISOS.USUARIOS.MODIFICAR, PERMISOS.USUARIOS.ELIMINAR, PERMISOS.USUARIOS.ASIGNAR_ROLES, PERMISOS.USUARIOS.ASIGNAR_PERMISOS)) {
     menuItems.push({
       href: 'usuarios.html',
       icon: 'bi-people',
@@ -81,7 +81,7 @@ function buildSidebar() {
   }
 
   // Roles
-  if (hasPermission('VER_ROLES', 'CREAR_ROLES', 'ASIGNAR_ROLES')) {
+  if (hasPermission(PERMISOS.ROLES.VER, PERMISOS.ROLES.CREAR, PERMISOS.ROLES.MODIFICAR, PERMISOS.ROLES.ELIMINAR)) {
     menuItems.push({
       href: 'roles.html',
       icon: 'bi-person-badge',
@@ -90,7 +90,7 @@ function buildSidebar() {
   }
 
   // Permisos
-  if (hasPermission('VER_PERMISOS', 'CREAR_PERMISOS', 'ASIGNAR_PERMISOS')) {
+  if (hasPermission(PERMISOS.PERMISOS.VER, PERMISOS.PERMISOS.CREAR, PERMISOS.PERMISOS.MODIFICAR, PERMISOS.PERMISOS.ELIMINAR)) {
     menuItems.push({
       href: 'permisos.html',
       icon: 'bi-key',

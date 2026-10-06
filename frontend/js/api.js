@@ -24,16 +24,57 @@ function isLoginPage() {
  * El Dashboard solo es accesible con VER_DASHBOARD; el resto de módulos
  * usan su permiso de visualización/gestión. Devuelve null si el usuario no
  * tiene acceso a ninguna página.
+ *
+ * Los nombres son los del catálogo de `backend/schema.sql`: en plural y con
+ * permisos separados por operación (CREAR_* / MODIFICAR_* / ELIMINAR_*).
  */
 function paginaInicio(permisos = []) {
   const tiene = (...perms) => perms.some((p) => permisos.includes(p));
   if (tiene('VER_DASHBOARD')) return 'dashboard.html';
-  if (tiene('VER_INCIDENCIAS', 'CREAR_INCIDENCIA', 'MODIFICAR_INCIDENCIA', 'ELIMINAR_INCIDENCIA')) return 'incidencias.html';
-  if (tiene('VER_USUARIOS', 'CREAR_USUARIO', 'ASIGNAR_ROLES', 'ASIGNAR_PERMISOS')) return 'usuarios.html';
-  if (tiene('VER_ROLES', 'CREAR_ROLES', 'ASIGNAR_ROLES')) return 'roles.html';
-  if (tiene('VER_PERMISOS', 'CREAR_PERMISOS', 'ASIGNAR_PERMISOS')) return 'permisos.html';
+  if (tiene('VER_INCIDENCIAS', 'CREAR_INCIDENCIAS', 'MODIFICAR_INCIDENCIAS', 'ELIMINAR_INCIDENCIAS')) return 'incidencias.html';
+  if (tiene('VER_USUARIOS', 'CREAR_USUARIOS', 'MODIFICAR_USUARIOS', 'ELIMINAR_USUARIOS', 'ASIGNAR_ROLES', 'ASIGNAR_PERMISOS')) return 'usuarios.html';
+  if (tiene('VER_ROLES', 'CREAR_ROLES', 'MODIFICAR_ROLES', 'ELIMINAR_ROLES', 'ASIGNAR_ROLES')) return 'roles.html';
+  if (tiene('VER_PERMISOS', 'CREAR_PERMISOS', 'MODIFICAR_PERMISOS', 'ELIMINAR_PERMISOS', 'ASIGNAR_PERMISOS')) return 'permisos.html';
   return null;
 }
+
+/**
+ * Nombres de permisos del catálogo, centralizados para que las páginas no
+ * repitan cadenas literales. Cualquier cambio en `schema.sql` se refleja aquí
+ * una sola vez.
+ *
+ * `gestionModulo(permisos, modulo)` indica si el usuario puede ver el módulo y
+ * al menos una de sus acciones, que es lo que decide si aparece en el sidebar.
+ */
+const PERMISOS = {
+  DASHBOARD: { VER: 'VER_DASHBOARD' },
+  INCIDENCIAS: {
+    VER: 'VER_INCIDENCIAS',
+    CREAR: 'CREAR_INCIDENCIAS',
+    MODIFICAR: 'MODIFICAR_INCIDENCIAS',
+    ELIMINAR: 'ELIMINAR_INCIDENCIAS',
+  },
+  USUARIOS: {
+    VER: 'VER_USUARIOS',
+    CREAR: 'CREAR_USUARIOS',
+    MODIFICAR: 'MODIFICAR_USUARIOS',
+    ELIMINAR: 'ELIMINAR_USUARIOS',
+    ASIGNAR_ROLES: 'ASIGNAR_ROLES',
+    ASIGNAR_PERMISOS: 'ASIGNAR_PERMISOS',
+  },
+  ROLES: {
+    VER: 'VER_ROLES',
+    CREAR: 'CREAR_ROLES',
+    MODIFICAR: 'MODIFICAR_ROLES',
+    ELIMINAR: 'ELIMINAR_ROLES',
+  },
+  PERMISOS: {
+    VER: 'VER_PERMISOS',
+    CREAR: 'CREAR_PERMISOS',
+    MODIFICAR: 'MODIFICAR_PERMISOS',
+    ELIMINAR: 'ELIMINAR_PERMISOS',
+  },
+};
 
 /**
  * Realiza una petición JSON a la API.
@@ -105,7 +146,50 @@ function fechaDentroDeRango(valor, desde, hasta) {
 }
 
 /**
+ * Formatea un timestamp del API en fecha y hora local.
+ *
+ * MySQL devuelve 'YYYY-MM-DD HH:MM:SS' sin zona horaria: `new Date()` con ese
+ * formato se interpretaría como UTC y desplazaría la hora. Por eso se cambia el
+ * espacio por una 'T' antes de parsear, para que se lea como hora local.
+ * @param {string|null} valor
+ * @returns {string} 'DD/MM/AAAA HH:MM' o '-' si no hay fecha válida.
+ */
+function formatearFechaHora(valor) {
+  if (!valor) return '-';
+  const fecha = new Date(String(valor).replace(' ', 'T'));
+  if (Number.isNaN(fecha.getTime())) return '-';
+  return fecha.toLocaleString('es-ES', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+/**
+ * Escapa un valor para insertarlo dentro de HTML.
+ *
+ * Todas las páginas pintan los datos del API con innerHTML, así que cualquier
+ * campo de texto (usuario, centro, ticket, nombre de rol…) debe pasar por
+ * aquí: sin escape, un valor con `<` rompería el marcado y un `<script>`
+ * ejecutaría código en el navegador de quien tenga la sesión abierta.
+ *
+ * Usa textContent en lugar de reemplazar caracteres a mano: el navegador
+ * aplica las mismas reglas que usaría al mostrar el texto, sin sorpresas.
+ * @param {*} valor
+ * @returns {string} HTML seguro para interpolar.
+ */
+function escaparHtml(valor) {
+  const div = document.createElement('div');
+  div.textContent = valor === null || valor === undefined ? '' : valor;
+  return div.innerHTML;
+}
+
+/**
  * Muestra una notificación Bootstrap.
+ * El mensaje se escapa: varios avisos incluyen texto devuelto por el servidor
+ * (p. ej. el detalle de un error de validación) y ese texto no es de fiar.
  * @param {string} message
  * @param {'info'|'success'|'warning'|'error'} [type]
  */
@@ -120,7 +204,7 @@ function showToast(message, type = 'info') {
   toastEl.setAttribute('role', 'alert');
   toastEl.innerHTML = `
     <div class="d-flex">
-      <div class="toast-body">${message}</div>
+      <div class="toast-body">${escaparHtml(message)}</div>
       <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
     </div>
   `;
