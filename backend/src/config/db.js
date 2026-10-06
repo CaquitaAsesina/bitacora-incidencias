@@ -3,18 +3,28 @@
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
 
+// Debe importarse antes de crear el pool: además de exponer `sslOptions`,
+// aplica el parche que parte el SSL Request en dos escrituras (ver archivo).
+import { sslOptions } from './mysqlSSL.js';
+
 dotenv.config();
 
 // Perú es UTC-5 todo el año (no aplica horario de verano).
 // MySQL2 no acepta "America/Lima"; debe ser un offset numérico.
 const ZONA_HORARIA_OFFSET = '-05:00';
 
-const pool = mysql.createPool({
+// Exportado para que server.js construya el pool de sesiones con la misma
+// configuración (express-mysql-session filtra las opciones que no conoce,
+// entre ellas `ssl`, así que recibe un pool ya preparado).
+export const opcionesMySQL = {
   host: process.env.DB_HOST || '127.0.0.1',
   port: process.env.DB_PORT || 3306,
   user: process.env.DB_USER || process.env.DB_USERNAME || 'root',
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'bitacora_incidencias',
+
+  // undefined cuando DB_SSL no está activo: mysql2 conecta sin TLS.
+  ssl: sslOptions,
 
   // Devuelve DATE como string "YYYY-MM-DD" en lugar de un Date en UTC.
   dateStrings: ['DATE'],
@@ -28,7 +38,9 @@ const pool = mysql.createPool({
   charset: 'utf8mb4',
   enableKeepAlive: true,
   keepAliveInitialDelay: 30000,
-});
+};
+
+const pool = mysql.createPool(opcionesMySQL);
 
 // Fuerza la TZ del servidor MySQL en cada conexión nueva del pool.
 // Usamos el mismo offset para que CURRENT_TIME, NOW(), etc. devuelvan hora de Perú.

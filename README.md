@@ -283,12 +283,48 @@ rol ADMINISTRADOR con todos los permisos y un usuario `admin` inicial.
 | `DB_USER` / `DB_USERNAME` | Sí          | Usuario de MySQL (se acepta cualquiera de los dos nombres).                                        |
 | `DB_PASSWORD`             | Sí          | Contraseña de MySQL.                                                                               |
 | `DB_NAME`                 | Sí          | Nombre de la base (por defecto `bitacora_incidencias`).                                            |
+| `DB_SSL`                  | No          | Activa TLS contra el servidor MySQL: `1`, `true`, `yes` o `REQUIRED` lo activan; `false`/`0` lo apaga. Por defecto desactivado (MySQL local). |
+| `DB_SSL_CA`               | No          | Ruta a la CA del proyecto, relativa a `backend/` (por defecto `certs/ca.pem`). Solo se lee cuando TLS está activo. |
 | `SESSION_SECRET`          | Recomendada | Secreto para firmar la cookie de sesión. Usa una cadena larga y aleatoria; cámbiala en producción. |
 | `PORT`                    | No          | Puerto del servidor (por defecto `3000`).                                                          |
 | `NODE_ENV`                | No          | `production` activa cookies `secure`.                                                              |
 
 > `backend/.env` está en `.gitignore` y **nunca** debe versionarse.
 > En el repositorio solo vive `.env.example` con valores de ejemplo.
+
+### 6.1 MySQL remoto con TLS (Aiven)
+
+Aiven exige conexión cifrada y, además, **su front-end no completa el handshake
+TLS si el paquete SSL Request de 36 bytes llega en un solo segmento TCP** (la
+conexión se queda muda y expira). El mismo problema aparece con el cliente
+oficial `mysql`, así que no es un defecto de mysql2. Para que Aiven lo procese
+bien, el paquete debe viajar en dos segmentos.
+
+`backend/src/config/mysqlSSL.js` combina ambas cosas:
+
+- carga la CA del proyecto (`certs/ca.pem`) y arma las opciones TLS que se
+  pasan al pool (`ssl: { ca, rejectUnauthorized: true, verifyIdentity: true }`);
+- parchea mysql2 para que el SSL Request se envíe en dos `write()` (cabecera
+  + payload), dejando intacto el orden del ClientHello y el resto de paquetes.
+
+El pool de sesiones de `express-mysql-session` recibe la misma configuración
+(`server.js` le entrega un pool propio con `opcionesMySQL`, porque ese paquete
+filtra las claves que no conoce y descartaría `ssl`).
+
+**Prueba de verificación** (con el `.env` de producción):
+
+```bash
+cd backend && node --input-type=module -e "
+import dbPool from './src/config/db.js';
+const [f] = await dbPool.query('SELECT 1 AS ok');
+console.log(f[0].ok === 1 ? 'OK: TLS conecta' : 'resultado inesperado');
+await dbPool.end();
+"
+```
+
+> El mismo `SELECT 1` con mysql2 **sin** el parche (la CA sola, sin partir el
+> SSL Request) queda colgado 10 s y no imprime nada; ese es el síntoma original
+> de la conexión contra Aiven.
 
 ## 7. Ejecución
 

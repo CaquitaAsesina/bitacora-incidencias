@@ -19,9 +19,12 @@ import cors from 'cors';
 import helmet from 'helmet';
 import session from 'express-session';
 import MySQLStoreFactory from 'express-mysql-session';
+import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
+import { opcionesMySQL } from './config/db.js';
 
 import authRoutes from './routes/auth.routes.js';
 import usuariosRoutes from './routes/usuarios.routes.js';
@@ -42,16 +45,20 @@ const MySQLStore = MySQLStoreFactory(session);
 // ---------------------------------------------------------------------
 // Sesiones (persistidas en MySQL, cookie httpOnly)
 // ---------------------------------------------------------------------
-const sessionStore = new MySQLStore({
-  host: process.env.DB_HOST || 'localhost',
-  port: process.env.DB_PORT || 3306,
-  user: process.env.DB_USER || process.env.DB_USERNAME || 'root',
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'bitacora_incidencias',
-  clearExpired: true,
-  checkExpirationInterval: 900000, // 15 minutos
-  expiration: 86400000, // 24 horas
-});
+// express-mysql-session copia solo un puñado de claves a mysql2 y descarta
+// el resto (entre ellas `ssl`), así que no se le pasan credenciales: se le
+// entrega un pool propio ya montado con la misma configuración que el de la
+// app (incluida la conexión TLS a Aiven).
+const poolSesiones = mysql.createPool(opcionesMySQL);
+
+const sessionStore = new MySQLStore(
+  {
+    clearExpired: true,
+    checkExpirationInterval: 900000, // 15 minutos
+    expiration: 86400000, // 24 horas
+  },
+  poolSesiones
+);
 
 // ---------------------------------------------------------------------
 // Seguridad y parsers

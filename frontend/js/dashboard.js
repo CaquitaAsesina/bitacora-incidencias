@@ -96,14 +96,6 @@ async function cargarMetadatos() {
     }
   }
 
-  const rango = meta.rango_fechas || {};
-  const info = document.getElementById('rangoDatos');
-  if (info) {
-    info.textContent =
-      rango.desde && rango.hasta
-        ? `Datos registrados entre ${rango.desde} y ${rango.hasta}. Sin rango de fechas se muestran los últimos 30 días.`
-        : 'Aún no hay incidencias registradas.';
-  }
 }
 
 /** Carga y pinta las tarjetas KPI (esqueleto de carga incluido). */
@@ -160,8 +152,8 @@ async function cargarKPIs() {
 /**
  * Carga todos los gráficos de barras/dona/línea.
  *
- * Rendimiento: las 7 consultas son independientes, así que van en un solo
- * Promise.all (una espera de red en lugar de 7 viajes en serie).
+ * Rendimiento: las 4 consultas son independientes, así que van en un solo
+ * Promise.all (una espera de red en lugar de 4 viajes en serie).
  */
 async function cargarGraficos() {
   const f = queryFiltros();
@@ -176,17 +168,11 @@ async function cargarGraficos() {
     resPorSistema,
     resPorEstado,
     resPorCentro,
-    resPorTipoIncidencia,
-    resPorResponsable,
-    resPorAutor,
   ] = await Promise.all([
     apiRequest(`/dashboard/por-dia?dias=30${f ? '&' + f.slice(1) : ''}`),
     apiRequest(`/dashboard/por-sistema${f}`),
     apiRequest(`/dashboard/por-estado${f}`),
     apiRequest(`/dashboard/por-centro${f}`),
-    apiRequest(`/dashboard/por-tipo-incidencia${f}`),
-    apiRequest(`/dashboard/por-responsable${f}`),
-    apiRequest(`/dashboard/por-autor${f}`),
   ]);
 
   // Por día (creadas vs cerradas)
@@ -283,75 +269,6 @@ async function cargarGraficos() {
       },
       options: {
         responsive: true,
-        scales: { x: { stacked: true }, y: { stacked: true } },
-      },
-    });
-  }
-
-  // Por tipo de incidencia (top 10)
-  if (resPorTipoIncidencia.ok) {
-    charts.porTipoIncidencia = new Chart(
-      document.getElementById('chartPorTipoIncidencia').getContext('2d'),
-      {
-        type: 'bar',
-        data: {
-          labels: resPorTipoIncidencia.data.slice(0, 10).map((d) => d.etiqueta),
-          datasets: [
-            {
-              label: 'Incidencias',
-              data: resPorTipoIncidencia.data.slice(0, 10).map((d) => d.total),
-              backgroundColor: '#2A9D8F',
-            },
-          ],
-        },
-        options: { responsive: true },
-      }
-    );
-  }
-
-  // Por responsable de negocio
-  if (resPorResponsable.ok) {
-    charts.porResponsable = new Chart(
-      document.getElementById('chartPorResponsable').getContext('2d'),
-      {
-        type: 'bar',
-        data: {
-          labels: resPorResponsable.data.map((d) => d.etiqueta),
-          datasets: [
-            {
-              label: 'Incidencias',
-              data: resPorResponsable.data.map((d) => d.total),
-              backgroundColor: '#457B9D',
-            },
-          ],
-        },
-        options: { responsive: true, indexAxis: 'y' },
-      }
-    );
-  }
-
-  // Por autor de registro (auditoría creado_por)
-  if (resPorAutor.ok) {
-    charts.porAutor = new Chart(document.getElementById('chartPorAutor').getContext('2d'), {
-      type: 'bar',
-      data: {
-        labels: resPorAutor.data.map((d) => d.nombre || d.usuario),
-        datasets: [
-          {
-            label: 'Registradas',
-            data: resPorAutor.data.map((d) => d.total),
-            backgroundColor: '#E76F51',
-          },
-          {
-            label: 'Cerradas',
-            data: resPorAutor.data.map((d) => d.cerradas),
-            backgroundColor: '#2A9D8F',
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        indexAxis: 'y',
         scales: { x: { stacked: true }, y: { stacked: true } },
       },
     });

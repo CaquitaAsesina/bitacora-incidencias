@@ -40,3 +40,7 @@ services:
         sync: false
       - key: SESSION_SECRET
         sync: false
+      - key: DB_SSL
+        sync: false
+      - key: DB_SSL_CA
+        value: certs/ca.pem

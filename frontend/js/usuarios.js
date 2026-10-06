@@ -121,7 +121,7 @@ async function cargarUsuarios() {
 function aplicarUsuarios(res) {
   if (!res.ok) {
     document.getElementById('tablaUsuariosBody').innerHTML =
-      '<tr><td colspan="14" class="text-center text-danger py-4">No se pudo cargar el listado de usuarios.</td></tr>';
+      '<tr><td colspan="13" class="text-center text-danger py-4">No se pudo cargar el listado de usuarios.</td></tr>';
     return;
   }
 
@@ -157,7 +157,7 @@ function renderTablaUsuarios() {
 
   if (usuariosData.length === 0) {
     tbody.innerHTML =
-      '<tr><td colspan="14" class="text-center text-muted py-4">No hay usuarios que coincidan con los filtros.</td></tr>';
+      '<tr><td colspan="13" class="text-center text-muted py-4">No hay usuarios que coincidan con los filtros.</td></tr>';
     return;
   }
 
