@@ -24,16 +24,16 @@ services:
     healthCheckPath: /
     envVars:
       - key: NODE_ENV
-        value: production
+        sync: false
       - key: DB_HOST
         sync: false
       - key: DB_PORT
-        value: '3306'
+        sync: false
       - key: DB_USER
         sync: false
       - key: DB_PASSWORD
         sync: false
       - key: DB_NAME
-        value: bitacora_incidencias
+        sync: false
       - key: SESSION_SECRET
         generateValue: true
