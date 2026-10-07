@@ -3,27 +3,30 @@
  * services/incidenciasService.js — Lógica de la bitácora
  * =====================================================================
  * Módulo alineado con schema.sql vigente:
- *   - SIN `tipo_centro` (columna eliminada del schema).
+ *   - SIN `fecha`: la fecha del registro vive en `creado_en` (TIMESTAMP, se
+ *     asigna sola al insertar). Los filtros fecha_desde/fecha_hasta y las
+ *     agrupaciones del dashboard usan `DATE(creado_en)`.
  *   - SIN `usuario_id`: la trazabilidad vive en `creado_por` (quién la registró)
  *     y `actualizado_por` (quién la tocó por última vez). Ambas son FK a
  *     usuarios con ON DELETE RESTRICT.
  *   - Índices disponibles y cómo los usa este archivo:
- *       idx_incidencias_fecha_tipo        (fecha, incidencia)
- *       idx_incidencias_centro_fecha      (centro, fecha)
- *       idx_incidencias_sistema_fecha     (sistema, fecha)
- *       idx_incidencias_responsable_fecha (responsable, fecha)
- *       idx_incidencias_hora_fin_fecha    (hora_fin, fecha)
- *       idx_incidencias_creado_por        (creado_por)
- *       idx_incidencias_actualizado_por   (actualizado_por)
+ *       idx_incidencias_centro_creado_en    (centro, creado_en)
+ *       idx_incidencias_sistema_creado_en   (sistema, creado_en)
+ *       idx_incidencias_incidencia_creado_en (incidencia, creado_en)
+ *       idx_incidencias_responsable_creado_en (responsable, creado_en)
+ *       idx_incidencias_hora_fin_creado_en  (hora_fin, creado_en)
+ *       idx_incidencias_creado_en           (creado_en)
+ *       idx_incidencias_creado_por          (creado_por)
+ *       idx_incidencias_actualizado_por     (actualizado_por)
  *
  * DECISIÓN DE ÍNDICES (importante):
- *   Los índices compuestos son (columna_filtro, fecha). Por eso los filtros de
- *   centro/sistema/incidencia/responsable son de IGUALDAD EXACTA (`=`), nunca
- *   `LIKE '%texto%'`: un comodín inicial anula el índice y obliga a escanear.
- *   La búsqueda libre la cubre el parámetro `q`, que sí es un LIKE con comodín
- *   inicial, y por eso está aislado del camino indexado.
+ *   Los índices compuestos son (columna_filtro, creado_en). Por eso los filtros
+ *   de centro/sistema/incidencia/responsable son de IGUALDAD EXACTA (`=`),
+ *   nunca `LIKE '%texto%'`: un comodín inicial anula el índice y obliga a
+ *   escanear. La búsqueda libre la cubre el parámetro `q`, que sí es un LIKE
+ *   con comodín inicial, y por eso está aislado del camino indexado.
  *   El filtro de estado usa `hora_fin IS [NOT] NULL`, que es exactamente el
- *   prefijo de idx_incidencias_hora_fin_fecha.
+ *   prefijo de idx_incidencias_hora_fin_creado_en.
  *
  * Para extender: cualquier regla sobre incidencias (campos nuevos, cálculos de
  * tiempos, estados) debe vivir en este archivo.
@@ -40,7 +43,6 @@ const SELECT_INCIDENCIA = `
   i.ticket,
   i.responsable,
   i.descripcion,
-  i.fecha,
   i.hora_inicio,
   i.hora_fin,
   i.tiempo_solucion,
@@ -62,33 +64,36 @@ const JOINS_AUDITORIA = `
 
 /**
  * Ordenamientos permitidos. Cada entrada se elige para aprovechar un índice:
- *   - `fecha*`  -> prefijo de idx_incidencias_fecha_tipo
- *   - `centro*` -> prefijo de idx_incidencias_centro_fecha
- *   - `sistema*`-> prefijo de idx_incidencias_sistema_fecha
- *   - `incidencia*` -> prefijo de idx_incidencias_fecha_tipo (2ª columna)
- *   - `responsable*`-> prefijo de idx_incidencias_responsable_fecha
- *   - `hora_fin*` -> prefijo de idx_incidencias_hora_fin_fecha
+ *   - `fecha*`(creado_en)* -> prefijo de idx_incidencias_creado_en
+ *   - `centro*` -> prefijo de idx_incidencias_centro_creado_en
+ *   - `sistema*`-> prefijo de idx_incidencias_sistema_creado_en
+ *   - `incidencia*` -> prefijo de idx_incidencias_incidencia_creado_en
+ *   - `responsable*`-> prefijo de idx_incidencias_responsable_creado_en
+ *   - `hora_fin*` -> prefijo de idx_incidencias_hora_fin_creado_en
+ * Las claves `fecha_desc`/`fecha_asc` se conservan por compatibilidad con el
+ * frontend, pero la fecha de registro ya no existe como columna propia: ambas
+ * ordenan por `creado_en` (cuándo se registró la incidencia).
  * El `id` de desempate siempre acompaña: hace la ordenación estable entre
  * páginas (sin él, LIMIT/OFFSET puede repetir o saltar filas).
  */
 const ORDENES_PERMITIDOS = {
-  fecha_desc: 'i.fecha DESC, i.id DESC',
-  fecha_asc: 'i.fecha ASC, i.id ASC',
-  centro_asc: 'i.centro ASC, i.fecha DESC, i.id DESC',
-  centro_desc: 'i.centro DESC, i.fecha DESC, i.id DESC',
-  sistema_asc: 'i.sistema ASC, i.fecha DESC, i.id DESC',
-  sistema_desc: 'i.sistema DESC, i.fecha DESC, i.id DESC',
-  incidencia_asc: 'i.incidencia ASC, i.fecha DESC, i.id DESC',
-  incidencia_desc: 'i.incidencia DESC, i.fecha DESC, i.id DESC',
-  responsable_asc: 'i.responsable ASC, i.fecha DESC, i.id DESC',
-  responsable_desc: 'i.responsable DESC, i.fecha DESC, i.id DESC',
-  hora_fin_desc: 'i.hora_fin DESC, i.fecha DESC, i.id DESC',
-  hora_fin_asc: 'i.hora_fin ASC, i.fecha DESC, i.id DESC',
-  hora_inicio_desc: 'i.hora_inicio DESC, i.fecha DESC, i.id DESC',
+  fecha_desc: 'i.creado_en DESC, i.id DESC',
+  fecha_asc: 'i.creado_en ASC, i.id ASC',
+  centro_asc: 'i.centro ASC, i.creado_en DESC, i.id DESC',
+  centro_desc: 'i.centro DESC, i.creado_en DESC, i.id DESC',
+  sistema_asc: 'i.sistema ASC, i.creado_en DESC, i.id DESC',
+  sistema_desc: 'i.sistema DESC, i.creado_en DESC, i.id DESC',
+  incidencia_asc: 'i.incidencia ASC, i.creado_en DESC, i.id DESC',
+  incidencia_desc: 'i.incidencia DESC, i.creado_en DESC, i.id DESC',
+  responsable_asc: 'i.responsable ASC, i.creado_en DESC, i.id DESC',
+  responsable_desc: 'i.responsable DESC, i.creado_en DESC, i.id DESC',
+  hora_fin_desc: 'i.hora_fin DESC, i.creado_en DESC, i.id DESC',
+  hora_fin_asc: 'i.hora_fin ASC, i.creado_en DESC, i.id DESC',
+  hora_inicio_desc: 'i.hora_inicio DESC, i.creado_en DESC, i.id DESC',
   ticket_asc: 'i.ticket ASC',
   ticket_desc: 'i.ticket DESC',
-  tiempo_solucion_desc: 'i.tiempo_solucion DESC, i.fecha DESC, i.id DESC',
-  tiempo_solucion_asc: 'i.tiempo_solucion ASC, i.fecha DESC, i.id DESC',
+  tiempo_solucion_desc: 'i.tiempo_solucion DESC, i.creado_en DESC, i.id DESC',
+  tiempo_solucion_asc: 'i.tiempo_solucion ASC, i.creado_en DESC, i.id DESC',
   // Auditoría: idx_incidencias_creado_por / idx_incidencias_actualizado_por.
   creado_en_desc: 'i.creado_en DESC, i.id DESC',
   creado_en_asc: 'i.creado_en ASC, i.id ASC',
@@ -112,6 +117,7 @@ const COLUMNAS_BUSQUEDA_LIBRE = [
 ];
 
 const REGEX_FECHA = /^\d{4}-\d{2}-\d{2}$/;
+const REGEX_HORA = /^([01]\d|2[0-3]):([0-5]\d)(:([0-5]\d))?$/;
 
 /**
  * Construye el WHERE una sola vez y lo reutiliza en el SELECT y en el COUNT.
@@ -126,7 +132,10 @@ function construirFiltros(filtros = {}) {
   let sql = '';
   const params = [];
 
-  // --- Rango de fechas: prefijo de idx_incidencias_fecha_tipo -------------
+  // --- Rango de fechas: prefijo de idx_incidencias_creado_en ----------------
+  // La columna `fecha` ya no existe: el día del registro es DATE(creado_en).
+  // Los límites llegan como AAA-MM-DD y se convierten a rangos de timestamp
+  // para que un filtro "hasta" incluya también los registros de ese día.
   const desde = REGEX_FECHA.test(String(filtros.fecha_desde || '').trim())
     ? String(filtros.fecha_desde).trim()
     : '';
@@ -137,21 +146,21 @@ function construirFiltros(filtros = {}) {
   if (desde && hasta) {
     // Rango invertido: se corrige intercambiando los límites.
     const [a, b] = desde <= hasta ? [desde, hasta] : [hasta, desde];
-    sql += ' AND i.fecha BETWEEN ? AND ?';
+    sql += ' AND i.creado_en >= ? AND i.creado_en < DATE_ADD(?, INTERVAL 1 DAY)';
     params.push(a, b);
   } else if (desde) {
-    sql += ' AND i.fecha >= ?';
+    sql += ' AND i.creado_en >= ?';
     params.push(desde);
   } else if (hasta) {
-    sql += ' AND i.fecha <= ?';
+    sql += ' AND i.creado_en < DATE_ADD(?, INTERVAL 1 DAY)';
     params.push(hasta);
   }
 
   // --- Filtros de igualdad exacta: hit de prefijo de los índices compuestos -
-  // centro      -> idx_incidencias_centro_fecha (centro, fecha)
-  // sistema     -> idx_incidencias_sistema_fecha (sistema, fecha)
-  // incidencia  -> idx_incidencias_fecha_tipo (fecha, incidencia)
-  // responsable -> idx_incidencias_responsable_fecha (responsable, fecha)
+  // centro      -> idx_incidencias_centro_creado_en (centro, creado_en)
+  // sistema     -> idx_incidencias_sistema_creado_en (sistema, creado_en)
+  // incidencia  -> idx_incidencias_incidencia_creado_en (incidencia, creado_en)
+  // responsable -> idx_incidencias_responsable_creado_en (responsable, creado_en)
   for (const campo of ['centro', 'sistema', 'incidencia', 'responsable']) {
     const valor = limpiarTexto(filtros[campo]);
     if (valor) {
@@ -160,7 +169,7 @@ function construirFiltros(filtros = {}) {
     }
   }
 
-  // --- Estado: prefijo de idx_incidencias_hora_fin_fecha (hora_fin, fecha) -
+  // --- Estado: prefijo de idx_incidencias_hora_fin_creado_en (hora_fin, creado_en) -
   if (filtros.estado === 'abierta') {
     sql += ' AND i.hora_fin IS NULL';
   } else if (filtros.estado === 'cerrada') {
@@ -225,6 +234,32 @@ function normalizarHora(valor) {
   return `${hh}:${mm}:${ss}`;
 }
 
+/** Valida una hora opcional: vacía → null; mal formada → error 400. */
+function horaOpcional(valor) {
+  const hora = limpiarTexto(valor);
+  if (!hora) return null;
+  if (!REGEX_HORA.test(hora)) {
+    const error = new Error('Hora de fin inválida (se espera HH:MM o HH:MM:SS)');
+    error.statusCode = 400;
+    throw error;
+  }
+  return normalizarHora(hora);
+}
+
+/** Acepta 'YYYY-MM-DD[ T]HH:MM[:SS]' (datetime-local del navegador o API). */
+const REGEX_DATETIME = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?$/;
+
+/** Normaliza un timestamp a 'YYYY-MM-DD HH:MM:SS' (formato de la columna). */
+function normalizarTimestamp(valor) {
+  const texto = limpiarTexto(valor);
+  if (!REGEX_DATETIME.test(texto)) {
+    const error = new Error('El campo creado_en debe ser una fecha y hora válida (YYYY-MM-DD HH:MM)');
+    error.statusCode = 400;
+    throw error;
+  }
+  return texto.replace('T', ' ').padEnd(19, ':00').slice(0, 19);
+}
+
 /** Traduce el parámetro `orden` a una cláusula ORDER BY de la lista blanca. */
 function resolverOrden(orden) {
   return ORDENES_PERMITIDOS[orden] || ORDENES_PERMITIDOS.fecha_desc;
@@ -248,12 +283,17 @@ function textoOpcional(valor, max, campo) {
 
 /**
  * MÓDULO INCIDENCIAS — REGLAS CRÍTICAS
- * - creado_por y actualizado_por SIEMPRE salen de la sesión (nunca del body).
- * - fecha, hora_inicio, creado_en, actualizado_en -> MySQL (DEFAULT / ON UPDATE).
- * - hora_fin y tiempo_solucion -> NULL al crear; los pone el backend al cerrar.
- * - Al modificar cualquier campo se refresca actualizado_por (auditoría real).
- * - Al cerrar: hora_fin = hora del servidor (o la enviada) y
- *   tiempo_solucion = hora_fin - hora_inicio con cruce de medianoche.
+ * - El alta solo pide datos de negocio (centro, sistema, incidencia, ticket,
+ *   responsable, descripcion). La incidencia siempre nace ABIERTA.
+ * - hora_inicio se registra sola (CURRENT_TIME del servidor). hora_fin y
+ *   tiempo_solucion quedan NULL hasta que se cierra/edita la incidencia.
+ * - Al editar se permite: cambiar el "registrado en" (creado_en) para
+ *   corregir/retro-datar el momento de registro, la hora de inicio y la hora
+ *   de fin. Si llega hora_fin, tiempo_solucion = hora_fin - hora_inicio se
+ *   calcula solo (con cruce de medianoche) y la incidencia queda cerrada.
+ * - creado_por y actualizado_por SIEMPRE salen de la sesión (nunca del body):
+ *   "modificado por" queda firmado con el usuario que guarda los cambios.
+ * - creado_en y actualizado_en -> MySQL (DEFAULT / ON UPDATE).
  * - `responsable` (texto libre) es un dato del negocio: NO se toca al cerrar.
  */
 
@@ -352,8 +392,11 @@ export async function obtenerIncidenciaPorId(id) {
 }
 
 /**
- * Crea una incidencia. La auditoría la pone la sesión, nunca el body.
- * @param {object} data centro, sistema, incidencia, ticket, responsable, descripcion
+ * Crea una incidencia. Solo pide datos de negocio: la hora de inicio la pone
+ * el servidor (CURRENT_TIME) y la auditoría, la sesión. La incidencia nace
+ * abierta (hora_fin y tiempo_solucion quedan NULL).
+ * @param {object} data centro, sistema, incidencia, ticket, responsable,
+ *   descripcion
  * @param {number} usuarioIdSesion
  * @throws {Error} 400 campo inválido o demasiado largo, 409 ticket duplicado.
  */
@@ -378,12 +421,14 @@ export async function crearIncidencia(data, usuarioIdSesion) {
     throw error;
   }
 
-  // fecha, hora_inicio, creado_en, actualizado_en -> MySQL por DEFAULT.
-  // hora_fin y tiempo_solucion quedan NULL (incidencia abierta).
+  // hora_inicio = CURRENT_TIME() del servidor. Sin hora_fin la incidencia queda
+  // abierta (hora_fin y tiempo_solucion usan el DEFAULT NULL).
+  // creado_en y actualizado_en -> MySQL por DEFAULT.
   const [result] = await pool.query(
     `INSERT INTO incidencias
-       (centro, sistema, incidencia, ticket, responsable, descripcion, creado_por, actualizado_por)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       (centro, sistema, incidencia, ticket, responsable, descripcion,
+        hora_inicio, creado_por, actualizado_por)
+     VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIME(), ?, ?)`,
     [
       payload.centro,
       payload.sistema,
@@ -480,12 +525,18 @@ const MAXIMOS_EDITABLES = {
 };
 
 /**
- * Modifica los campos editables de una incidencia y, opcionalmente, la cierra.
- * - fecha y hora_inicio son editables.
+ * Modifica una incidencia y, opcionalmente, la cierra.
+ * - "Registrado en" (creado_en) es editable: permite corregir o retro-datar el
+ *   momento de registro de la incidencia.
+ * - hora_inicio y hora_fin son editables (hora_inicio se generó sola al crear,
+ *   pero se puede corregir al editar).
  * - Si `cerrar` es true: fija hora_fin (o la hora actual del servidor si no
  *   llega) y calcula tiempo_solucion con la hora de inicio de ESTA petición.
  * - Si ya está cerrada y llega hora_fin, se corrige y se recalcula.
- * - Toda modificación refresca actualizado_por con el usuario de la sesión.
+ * - Si ya está cerrada y cambia hora_inicio, se recalcula tiempo_solucion
+ *   para que la duración siga siendo coherente con las horas.
+ * - Toda modificación refresca actualizado_por con el usuario de la sesión:
+ *   "modificado por" queda firmado con quien guarda los cambios.
  */
 export async function actualizarIncidencia(id, data, usuarioIdSesion) {
   const incidencia = await obtenerIncidenciaPorId(id);
@@ -521,23 +572,19 @@ export async function actualizarIncidencia(id, data, usuarioIdSesion) {
     params.push(nuevoTicket);
   }
 
-  // Hora de inicio efectiva: si esta misma petición la modifica, el cálculo de
-  // tiempo_solucion debe usar la nueva, no la guardada.
-  const horaInicioEfectiva = data.hora_inicio
-    ? normalizarHora(data.hora_inicio)
-    : incidencia.hora_inicio;
-
-  if (data.fecha !== undefined) {
-    if (!REGEX_FECHA.test(String(data.fecha).trim())) {
-      const error = new Error('Fecha inválida (se espera AAAA-MM-DD)');
-      error.statusCode = 400;
-      throw error;
-    }
-    updates.push('fecha = ?');
-    params.push(String(data.fecha).trim());
+  // "Registrado en": editable para corregir/retro-datar el momento de registro.
+  if (data.creado_en) {
+    updates.push('creado_en = ?');
+    params.push(normalizarTimestamp(data.creado_en));
   }
 
-  if (data.hora_inicio !== undefined && normalizarHora(data.hora_inicio) !== incidencia.hora_inicio) {
+  // Hora de inicio efectiva: si esta misma petición la modifica, el cálculo de
+  // tiempo_solucion debe usar la nueva, no la guardada.
+  const horaInicioNueva = data.hora_inicio !== undefined ? horaOpcional(data.hora_inicio) : null;
+  const horaInicioEfectiva = horaInicioNueva || incidencia.hora_inicio;
+  const cambiaHoraInicio = horaInicioNueva !== null && horaInicioNueva !== incidencia.hora_inicio;
+
+  if (cambiaHoraInicio) {
     updates.push('hora_inicio = ?');
     params.push(horaInicioEfectiva);
   }
@@ -555,11 +602,16 @@ export async function actualizarIncidencia(id, data, usuarioIdSesion) {
     updates.push('hora_fin = ?', 'tiempo_solucion = ?');
     params.push(horaFin, tiempoSolucion);
   } else if (data.hora_fin) {
-    const horaFinNueva = normalizarHora(data.hora_fin);
+    const horaFinNueva = horaOpcional(data.hora_fin);
     // Incidencia ya cerrada: se permite corregir la hora de fin y se
     // recalcula tiempo_solucion con la hora de inicio efectiva.
     updates.push('hora_fin = ?', 'tiempo_solucion = ?');
     params.push(horaFinNueva, await calcularTiempoSolucion(horaFinNueva, horaInicioEfectiva));
+  } else if (cambiaHoraInicio && incidencia.hora_fin !== null) {
+    // Ya cerrada y solo cambió la hora de inicio: se mantiene la coherencia
+    // recalculando la duración con la nueva hora.
+    updates.push('tiempo_solucion = ?');
+    params.push(await calcularTiempoSolucion(incidencia.hora_fin, horaInicioEfectiva));
   }
 
   if (updates.length === 0) {
@@ -597,12 +649,13 @@ export async function eliminarIncidencia(id) {
  * a la vez: MySQL tenía que materializar el producto cartesiano de las
  * combinaciones existentes y filtrar en memoria. Ahora son cuatro consultas
  * separadas en paralelo; cada DISTINCT puede recorrer un índice distinto
- * (idx_incidencias_centro_fecha, idx_incidencias_sistema_fecha,
- * idx_incidencias_fecha_tipo, idx_incidencias_responsable_fecha) y devolver
- * solo los valores distintos ordenados.
+ * (idx_incidencias_centro_creado_en, idx_incidencias_sistema_creado_en,
+ * idx_incidencias_incidencia_creado_en, idx_incidencias_responsable_creado_en)
+ * y devolver solo los valores distintos ordenados.
  *
  * Además devuelve `creadores` (autores reales, no texto libre) y el rango de
- * fechas con datos, para que el frontend no tenga que inventar filtros.
+ * fechas con datos (DATE(creado_en)), para que el frontend no tenga que
+ * inventar filtros.
  */
 export async function obtenerValoresSugeridos() {
   const [centros, sistemas, incidencias, responsables, autores, rango] = await Promise.all([
@@ -630,7 +683,7 @@ export async function obtenerValoresSugeridos() {
        LEFT JOIN usuarios u ON u.id = i.creado_por
        ORDER BY nombre`
     ),
-    pool.query('SELECT MIN(fecha) AS desde, MAX(fecha) AS hasta FROM incidencias'),
+    pool.query('SELECT MIN(DATE(creado_en)) AS desde, MAX(DATE(creado_en)) AS hasta FROM incidencias'),
   ]);
 
   return {
@@ -645,7 +698,7 @@ export async function obtenerValoresSugeridos() {
 
 /**
  * Resumen de estados para el badge del listado (abierta/cerrada).
- * Usa el prefijo de idx_incidencias_hora_fin_fecha.
+ * Usa el prefijo de idx_incidencias_hora_fin_creado_en.
  */
 export async function contarPorEstado(filtros = {}) {
   const { sql, params } = construirFiltros({ ...filtros, estado: undefined });

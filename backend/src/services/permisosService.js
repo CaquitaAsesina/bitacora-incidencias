@@ -10,8 +10,9 @@
  *   usuarios que tengan ese rol.
  *
  * LÓGICA B (roles.tipo = 'PERSONALIZADO'):
- *   Los permisos salen de usuarios_roles_permisos y solo cuentan los que están
- *   con concedido = TRUE.
+ *   Los permisos salen de usuarios_roles_permisos. La columna `concedido` ya
+ *   no existe en el schema: UNA FILA = permiso concedido. Para quitar un
+ *   permiso se borra la fila.
  *
  * Rendimiento: ambas lógicas se resuelven en UNA consulta con UNION en lugar
  * de encadenar consultas por cada rol del usuario.
@@ -25,9 +26,9 @@
  *   - idx_roles_permisos_permiso_id (permiso_id, rol_id)
  *       -> reverse lookup: qué roles usan un permiso. Es lo que permite avisar
  *          antes de borrar uno que sigue en uso.
- *   - idx_urp_permiso (permiso_id, concedido)
- *       -> cuántos usuarios lo tienen concedido o denegado, en dos lecturas
- *          directas del índice en vez de un COUNT con JOIN.
+ *   - idx_urp_permiso (permiso_id)
+ *       -> cuántos usuarios lo tienen asignado (Lógica B), en una lectura
+ *          directa del índice en vez de un COUNT con JOIN.
  *
  * Para extender: aquí va la regla de resolución de permisos.
  * =====================================================================
@@ -52,8 +53,8 @@ const JOINS_PERMISO = `
  *
  * Lógica A entra por usuarios_roles.PK (usuario_id, rol_id) y sale por
  * roles_permisos.PK (rol_id, permiso_id).
- * Lógica B entra por idx_urp_rol_usuario (rol_id, usuario_id) y filtra
- * concedido = TRUE desde el propio índice.
+ * Lógica B entra por idx_urp_rol_usuario (rol_id, usuario_id); la presencia
+ * de la fila ES el permiso (ya no existe la columna concedido).
  *
  * @param {number|string} usuarioId
  * @returns {Promise<string[]>} nombres de permisos únicos.
@@ -73,7 +74,7 @@ export async function obtenerPermisosEfectivos(usuarioId) {
        INNER JOIN usuarios_roles_permisos urp
          ON urp.usuario_id = ur.usuario_id AND urp.rol_id = ur.rol_id
        INNER JOIN permisos p ON p.id = urp.permiso_id
-      WHERE ur.usuario_id = ? AND r.tipo = 'PERSONALIZADO' AND urp.concedido = TRUE`,
+      WHERE ur.usuario_id = ? AND r.tipo = 'PERSONALIZADO'`,
     [usuarioId, usuarioId]
   );
 
@@ -90,9 +91,7 @@ export async function listarPermisos() {
     `SELECT ${SELECT_PERMISO},
        (SELECT COUNT(*) FROM roles_permisos WHERE permiso_id = p.id) AS total_roles,
        (SELECT COUNT(*) FROM usuarios_roles_permisos
-          WHERE permiso_id = p.id AND concedido = TRUE) AS usuarios_concedidos,
-       (SELECT COUNT(*) FROM usuarios_roles_permisos
-          WHERE permiso_id = p.id AND concedido = FALSE) AS usuarios_denegados
+          WHERE permiso_id = p.id) AS usuarios_concedidos
      FROM permisos p
      ${JOINS_PERMISO}
      ORDER BY p.nombre`
@@ -189,31 +188,26 @@ export async function listarRolesDePermiso(permisoId) {
 }
 
 /**
- * Usuarios con un permiso personalizado concedido o denegado (Lógica B).
- * Entra por idx_urp_permiso (permiso_id, concedido).
- * @param {'concedido'|'denegado'|'todos'} estado
+ * Usuarios con un permiso personalizado asignado (Lógica B).
+ * Entra por idx_urp_permiso (permiso_id) y une con el rol por PK.
+ * El parámetro `estado` se conserva por compatibilidad de la ruta, pero ya no
+ * filtra: la existencia de la fila es el único estado posible.
+ * @param {'concedido'|'denegado'|'todos'} [estado] ignorado (sin columna concedido)
  */
 export async function listarUsuariosDePermiso(permisoId, estado = 'concedido') {
   const permiso = await obtenerPermisoPorId(permisoId);
   if (!permiso) throw error404('Permiso no encontrado');
 
-  let filtro = '';
-  const params = [permisoId];
-  if (estado === 'concedido' || estado === 'denegado') {
-    filtro = ' AND urp.concedido = ?';
-    params.push(estado === 'concedido');
-  }
-
   const [rows] = await pool.query(
     `SELECT u.id, u.usuario, u.nombre, u.apellido, u.habilitado,
             r.id AS rol_id, r.nombre AS rol, r.tipo AS rol_tipo,
-            urp.concedido, urp.creado_en AS asignado_en
+            urp.creado_en AS asignado_en
      FROM usuarios_roles_permisos urp
      INNER JOIN usuarios u ON u.id = urp.usuario_id
      INNER JOIN roles r ON r.id = urp.rol_id
-     WHERE urp.permiso_id = ?${filtro}
+     WHERE urp.permiso_id = ?
      ORDER BY u.apellido, u.nombre`,
-    params
+    [permisoId]
   );
   return rows;
 }
@@ -227,7 +221,7 @@ export async function listarUsuariosDePermiso(permisoId, estado = 'concedido') {
  *
  * @param {number|string} usuarioId
  * @param {number|string} rolId
- * @param {{ permiso_id: number, concedido?: boolean }[]} permisos
+ * @param {{ permiso_id: number }[]} permisos
  * @throws {Error} 400/404 según validaciones.
  */
 export async function asignarPermisosAUsuarioRol(usuarioId, rolId, permisos) {

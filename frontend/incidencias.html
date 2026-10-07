@@ -126,10 +126,8 @@
                             <div class="col-6 col-md-4 col-lg-2">
                                 <label class="form-label form-label-sm">Ordenar por</label>
                                 <select class="form-select form-select-sm" id="filtroOrden">
-                                    <option value="fecha_desc">Fecha (más reciente)</option>
-                                    <option value="fecha_asc">Fecha (más antigua)</option>
-                                    <option value="creado_en_desc">Alta (más reciente)</option>
-                                    <option value="creado_en_asc">Alta (más antigua)</option>
+                                    <option value="creado_en_desc">Registrada (más reciente)</option>
+                                    <option value="creado_en_asc">Registrada (más antigua)</option>
                                     <option value="actualizado_en_desc">Última modificación</option>
                                     <option value="ticket_asc">Ticket (A-Z)</option>
                                     <option value="centro_asc">Centro (A-Z)</option>
@@ -197,10 +195,9 @@
                                     <tr>
                                         <th>ID</th>
                                         <th>Ticketㅤㅤㅤㅤ</th>
-                                        <th class="no-recorta">Fecha</th>
                                         <th class="no-recorta">Inicio</th>
                                         <th class="no-recorta">Fin</th>
-                                        <th>Centroㅤㅤㅤㅤㅤㅤㅤ</th>
+                                        <th>Centroㅤㅤㅤㅤㅤㅤㅤㅤㅤ</th>
                                         <th>Sistemaㅤㅤ</th>
                                         <th>Incidenciaㅤㅤㅤㅤㅤㅤ</th>
                                         <th>Responsableㅤㅤ</th>
@@ -212,7 +209,6 @@
                                         <th class="no-recorta">Registrado enㅤㅤ</th>
                                         <th class="no-recorta">Modificado enㅤㅤ</th>
                                         <th>Accionesㅤㅤㅤㅤ</th>
-                                    </tr>
                                     </tr>
                                 </thead>
                                 <tbody id="tablaIncidenciasBody"></tbody>
@@ -367,8 +363,8 @@
                     <h6 class="fw-bold">Tiempos</h6>
                     <div class="row g-3">
                         <div class="col-md-4">
-                            <label class="form-label">Fecha *</label>
-                            <input type="date" class="form-control" id="editarFecha" required>
+                            <label class="form-label">Registrado en *</label>
+                            <input type="datetime-local" class="form-control" id="editarCreadoEn" required>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Hora de inicio *</label>

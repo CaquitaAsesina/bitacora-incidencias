@@ -50,23 +50,18 @@ const asignarRolValidation = [
 ];
 
 /**
- * Permisos personalizados (Lógica B) — cuerpo `{ permisos: [{ permiso_id, concedido }] }`.
+ * Permisos personalizados (Lógica B) — cuerpo `{ permisos: [{ permiso_id }] }`.
  *
- * El objeto, no un id suelto: `concedido: false` deniega explícitamente un
- * permiso que la Lógica A concede, y esa fila tiene que poder guardarse aunque
- * el checkbox esté desmarcado. Un `number[]` perdería esa información y el
- * servicio (`normalizarPermisos`) además la descartaría.
+ * La columna `concedido` ya no existe en el schema: UNA FILA en
+ * usuarios_roles_permisos ES el permiso concedido, así que el array se envía
+ * con los ids que se quiere tener apagado y encendido por completo.
  */
 const permisosValidation = [
   body('permisos').isArray().withMessage('permisos debe ser un array de permisos'),
-  body('permisos.*').isObject().withMessage('Cada permiso debe ser un objeto { permiso_id, concedido }'),
+  body('permisos.*').isObject().withMessage('Cada permiso debe ser un objeto { permiso_id }'),
   body('permisos.*.permiso_id')
     .isInt({ min: 1 })
     .withMessage('Cada permiso necesita un permiso_id numérico válido'),
-  body('permisos.*.concedido')
-    .optional()
-    .isBoolean()
-    .withMessage('concedido debe ser true o false'),
 ];
 
 // La auditoría la firma la sesión, no el cliente.

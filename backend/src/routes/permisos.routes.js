@@ -53,25 +53,21 @@ const permisoValidation = [
 
 /**
  * Asignación por par usuario-rol (Lógica B) — cuerpo
- * `{ permisos: [{ permiso_id, concedido }] }`.
+ * `{ permisos: [{ permiso_id }] }`.
  *
  * Este endpoint es un alias de `POST /api/usuarios/:id/permisos-personalizados`:
  * ambos delegan en `usuariosService.asignarPermisosPersonalizados()`, que
  * descarta silenciosamente cualquier elemento que no traiga `permiso_id`. Por
  * eso el validador exige el objeto completo: un `number[]` pasaba el chequeo y
- * después se perdía entero, y `concedido: false` es justo el caso que un id
- * suelto no puede representar.
+ * después se perdía entero. La columna `concedido` ya no existe: la fila es el
+ * permiso.
  */
 const asignarPermisosValidation = [
   body('permisos').isArray().withMessage('permisos debe ser un array de permisos'),
-  body('permisos.*').isObject().withMessage('Cada permiso debe ser un objeto { permiso_id, concedido }'),
+  body('permisos.*').isObject().withMessage('Cada permiso debe ser un objeto { permiso_id }'),
   body('permisos.*.permiso_id')
     .isInt({ min: 1 })
     .withMessage('Cada permiso necesita un permiso_id numérico válido'),
-  body('permisos.*.concedido')
-    .optional()
-    .isBoolean()
-    .withMessage('concedido debe ser true o false'),
 ];
 
 // Orden de la cadena: sesión -> permiso -> id -> body -> validación -> controller.

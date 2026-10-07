@@ -144,7 +144,7 @@ function autorLegible(usuario) {
 /** Celda de fecha de auditoría: formatearFechaHora ya devuelve '—' si no hay. */
 function celdaFecha(valor) {
   const texto = formatearFechaHora(valor).replace(',', '');
-  return `<span style="color: #4caf50; font-weight: 350; font-size: 0.85xem;">${escaparHtml(texto)}</span>`;
+  return `<span style="color: #4caf50; font-weight: 350; font-size: 0.85em;">${escaparHtml(texto)}</span>`;
 }
 
 /** Pinta la tabla de usuarios. */

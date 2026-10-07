@@ -26,7 +26,7 @@ import incidenciasService from '../services/incidenciasService.js';
  * Filtros del listado, tomados de la query.
  *
  * `centro`, `sistema`, `incidencia` y `responsable` se comparan con igualdad
- * exacta para que el planner use los índices compuestos (columna, fecha).
+ * exacta para que el planner use los índices compuestos (columna, creado_en).
  * La búsqueda parcial va aparte en `q`, que sí usa LIKE con comodín inicial.
  */
 function filtrosDesdeQuery(query) {

@@ -7,18 +7,19 @@
  * sistema, incidencia, responsable, estado) para que los números de las
  * tarjetas y los de los gráficos siempre cuadren entre sí.
  *
- * ÍNDICES DEL SCHEMA Y CÓMO SE APROVECHAN:
- *   - idx_incidencias_fecha_tipo        (fecha, incidencia)
+ * ÍNDICES DEL SCHEMA Y CÓMO SE APROVECHAN (la columna `fecha` ya no existe:
+ * el día del registro es `creado_en`, por eso todo agrupa por DATE(creado_en)):
+ *   - idx_incidencias_creado_en          (creado_en)
  *       -> KPIs, series por día, tipo de incidencia y tiempo de solución.
- *   - idx_incidencias_centro_fecha      (centro, fecha)
+ *   - idx_incidencias_centro_creado_en   (centro, creado_en)
  *       -> reporte por centro; sin rango de fechas MySQL recorre el índice en
  *          modo "loose index scan" y agrupa sin filesort.
- *   - idx_incidencias_sistema_fecha     (sistema, fecha) -> reporte por sistema.
- *   - idx_incidencias_responsable_fecha (responsable, fecha)
+ *   - idx_incidencias_sistema_creado_en  (sistema, creado_en) -> reporte por sistema.
+ *   - idx_incidencias_responsable_creado_en (responsable, creado_en)
  *       -> reporte por responsable de negocio (texto libre).
- *   - idx_incidencias_hora_fin_fecha    (hora_fin, fecha)
+ *   - idx_incidencias_hora_fin_creado_en (hora_fin, creado_en)
  *       -> abiertas/cerradas y series por día.
- *   - idx_incidencias_creado_por        (creado_por) -> ranking de autores.
+ *   - idx_incidencias_creado_por         (creado_por) -> ranking de autores.
  *
  * `tipo_centro` ya no existe en el schema: no hay gráfico ni endpoint de él.
  *
@@ -30,9 +31,11 @@ import pool from '../config/db.js';
 const REGEX_FECHA = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
- * Filtros de fecha (fecha_desde / fecha_hasta) sobre la columna fecha.
+ * Filtros de fecha (fecha_desde / fecha_hasta) sobre DATE(creado_en).
  * Acepta YYYY-MM-DD; si el rango viene invertido se corrige intercambiando los
- * límites. Devuelve { sql, params } con los "AND" que apliquen.
+ * límites. Los límites llegan como fechas y se convierten a rangos de
+ * timestamp para que un "hasta" incluya también los registros de ese día.
+ * Devuelve { sql, params } con los "AND" que apliquen.
  */
 function filtroFechas(filtros = {}) {
   const desde = REGEX_FECHA.test(String(filtros.fecha_desde || '').trim())
@@ -47,13 +50,13 @@ function filtroFechas(filtros = {}) {
 
   if (desde && hasta) {
     const [a, b] = desde <= hasta ? [desde, hasta] : [hasta, desde];
-    sql = ' AND fecha BETWEEN ? AND ?';
+    sql = ' AND creado_en >= ? AND creado_en < DATE_ADD(?, INTERVAL 1 DAY)';
     params.push(a, b);
   } else if (desde) {
-    sql = ' AND fecha >= ?';
+    sql = ' AND creado_en >= ?';
     params.push(desde);
   } else if (hasta) {
-    sql = ' AND fecha <= ?';
+    sql = ' AND creado_en < DATE_ADD(?, INTERVAL 1 DAY)';
     params.push(hasta);
   }
 
@@ -62,8 +65,8 @@ function filtroFechas(filtros = {}) {
 
 /**
  * Filtros por dimensión. Son de igualdad EXACTA a propósito: cada una calza
- * con el prefijo de un índice compuesto (columna, fecha). Con `=` el planner
- * puede usar el índice; con `LIKE '%x%'` no puede y acaba en filescan.
+ * con el prefijo de un índice compuesto (columna, creado_en). Con `=` el
+ * planner puede usar el índice; con `LIKE '%x%'` no puede y acaba en filescan.
  * @param {string} alias prefijo de tabla ('i.' o '').
  */
 function filtroDimensiones(filtros = {}, alias = '') {
@@ -121,7 +124,7 @@ export async function obtenerKPIs(filtros) {
                 THEN TIME_TO_SEC(tiempo_solucion) END) AS promedio_segundos,
        MAX(CASE WHEN tiempo_solucion IS NOT NULL
                 THEN TIME_TO_SEC(tiempo_solucion) END) AS maximo_segundos,
-       COALESCE(SUM(fecha = CURDATE()), 0) AS hoy,
+       COALESCE(SUM(creado_en >= CURDATE()), 0) AS hoy,
        COUNT(DISTINCT centro)    AS centros,
        COUNT(DISTINCT sistema)   AS sistemas,
        COUNT(DISTINCT incidencia) AS tipos_incidencia,
@@ -166,8 +169,8 @@ function segundosAHHMMSS(segundos) {
 
 /**
  * Incidencias creadas/cerradas por día dentro del rango pedido.
- * Si no hay rango explícito se usa `fecha >= CURDATE() - dias`.
- * El rango se apoya en el prefijo de idx_incidencias_fecha_tipo.
+ * Si no hay rango explícito se usa `creado_en >= CURDATE() - dias`.
+ * El rango se apoya en el prefijo de idx_incidencias_creado_en.
  * @param {number|string} dias
  * @param {object} filtros
  */
@@ -180,14 +183,14 @@ export async function incidenciasPorDia(dias = 30, filtros = {}) {
 
   const [rows] = await pool.query(
     `SELECT
-       fecha,
+       DATE(creado_en) AS fecha,
        COUNT(*) AS creadas,
        SUM(hora_fin IS NOT NULL) AS cerradas,
        AVG(TIME_TO_SEC(tiempo_solucion)) AS promedio_segundos
      FROM incidencias
-     WHERE 1=1${where}${usaRango ? '' : ' AND fecha >= DATE_SUB(CURDATE(), INTERVAL ? DAY)'}
-     GROUP BY fecha
-     ORDER BY fecha ASC`,
+     WHERE 1=1${where}${usaRango ? '' : ' AND creado_en >= DATE_SUB(CURDATE(), INTERVAL ? DAY)'}
+     GROUP BY DATE(creado_en)
+     ORDER BY DATE(creado_en) ASC`,
     usaRango ? params : [...params, Math.max(parseInt(dias, 10) || 30, 1)]
   );
 
@@ -201,7 +204,7 @@ export async function incidenciasPorDia(dias = 30, filtros = {}) {
   }));
 }
 
-/** Top 10 sistemas con más incidencias (idx_incidencias_sistema_fecha). */
+/** Top 10 sistemas con más incidencias (idx_incidencias_sistema_creado_en). */
 export async function porSistema(filtros) {
   const { sql, params } = construirWhere(filtros);
   const [rows] = await pool.query(
@@ -232,7 +235,7 @@ export async function porCentro(filtros) {
   return rows.map(normalizarNumeros);
 }
 
-/** Incidencias por tipo de incidencia (segunda columna de idx_incidencias_fecha_tipo). */
+/** Incidencias por tipo de incidencia (segunda columna de idx_incidencias_incidencia_creado_en). */
 export async function porTipoIncidencia(filtros) {
   const { sql, params } = construirWhere(filtros);
   const [rows] = await pool.query(
@@ -249,7 +252,7 @@ export async function porTipoIncidencia(filtros) {
 
 /**
  * Ranking de responsables de negocio (columna `responsable`, texto libre).
- * Usa el prefijo de idx_incidencias_responsable_fecha.
+ * Usa el prefijo de idx_incidencias_responsable_creado_en.
  */
 export async function porResponsable(filtros) {
   const { sql, params } = construirWhere(filtros);
@@ -299,8 +302,8 @@ export async function porAutor(filtros) {
 
 /**
  * Estado global (abiertas vs cerradas). El predicado `hora_fin IS [NOT] NULL`
- * es el prefijo de idx_incidencias_hora_fin_fecha: se resuelve por índice en
- * lugar de agregarse sobre todas las filas del rango.
+ * es el prefijo de idx_incidencias_hora_fin_creado_en: se resuelve por índice
+ * en lugar de agregarse sobre todas las filas del rango.
  */
 export async function porEstado(filtros) {
   const { sql, params } = construirWhere(filtros);
@@ -321,11 +324,11 @@ export async function porEstado(filtros) {
 export async function heatmap(filtros = {}) {
   const { sql, params } = construirWhere(filtros);
   const [rows] = await pool.query(
-    `SELECT DAYOFWEEK(fecha) AS dia_semana,  -- 1=Domingo, 2=Lunes...
+    `SELECT DAYOFWEEK(creado_en) AS dia_semana,  -- 1=Domingo, 2=Lunes...
             HOUR(hora_inicio) AS hora,
             COUNT(*) AS total
      FROM incidencias WHERE 1=1${sql}
-     GROUP BY DAYOFWEEK(fecha), HOUR(hora_inicio)`,
+     GROUP BY DAYOFWEEK(creado_en), HOUR(hora_inicio)`,
     params
   );
   return rows.map(normalizarNumeros);
@@ -350,12 +353,12 @@ export async function porTiempoSolucion(limite = 30, filtros = {}) {
          i.centro,
          i.sistema,
          i.responsable,
-         i.fecha,
+         DATE(i.creado_en) AS fecha,
          i.tiempo_solucion,
          TIME_TO_SEC(i.tiempo_solucion) / 60 AS minutos
        FROM incidencias i
        WHERE i.tiempo_solucion IS NOT NULL${sql}
-       ORDER BY i.fecha DESC, i.id DESC
+       ORDER BY i.creado_en DESC, i.id DESC
        LIMIT ?`,
       [...params, tope]
     ),
@@ -411,9 +414,9 @@ export async function obtenerMetadatos() {
        FROM usuarios
        ORDER BY habilitado DESC, apellido, nombre`
     ),
-    // MIN/MAX de una columna DATE ya llegan como 'YYYY-MM-DD' porque el pool usa
-    // dateStrings: ['DATE'], así que el frontend puede leerlos directo.
-    pool.query('SELECT MIN(fecha) AS desde, MAX(fecha) AS hasta FROM incidencias'),
+    // MIN/MAX de DATE(creado_en) ya llegan como 'YYYY-MM-DD' porque el pool
+    // usa dateStrings: ['DATE'], así que el frontend puede leerlos directo.
+    pool.query('SELECT MIN(DATE(creado_en)) AS desde, MAX(DATE(creado_en)) AS hasta FROM incidencias'),
   ]);
 
   return {

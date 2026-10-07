@@ -163,7 +163,7 @@ function renderTablaRoles() {
       <td>${celdaFecha(rol.creado_en)}</td>
       <td>${celdaFecha(rol.actualizado_en)}</td>
 
-      <td class="text-nowrap>
+      <td class="text-nowrap">
       <div class="d-inline-flex flex-nowrap gap-1">
         <button class="btn btn-sm btn-outline-secondary" onclick="verUsuariosDeRol(${rol.id})" title="Ver usuarios con este rol" aria-label="Ver usuarios del rol ${escaparHtml(rol.nombre)}">
           <i class="bi bi-people"></i>
@@ -178,7 +178,7 @@ function renderTablaRoles() {
 }
 function celdaFecha(valor) {
   const texto = formatearFechaHora(valor).replace(',', '');
-  return `<span style="color: #4caf50; font-weight: 350; font-size: 0.85xem;">${escaparHtml(texto)}</span>`;
+  return `<span style="color: #4caf50; font-weight: 350; font-size: 0.85em;">${escaparHtml(texto)}</span>`;
 }
 window.verUsuariosDeRol = async function (id) {
   const rol = rolesData.find((r) => r.id === id);

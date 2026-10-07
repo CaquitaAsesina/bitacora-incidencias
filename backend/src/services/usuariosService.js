@@ -522,10 +522,10 @@ export async function asignarPermisosPersonalizados(usuarioId, rolId, permisos) 
     ]);
 
     if (ids.length > 0) {
-      const placeholders = ids.map(() => '(?, ?, ?, ?)').join(', ');
-      const params = ids.flatMap((p) => [usuarioId, rolId, p.permiso_id, p.concedido]);
+      const placeholders = ids.map(() => '(?, ?, ?)').join(', ');
+      const params = ids.flatMap((p) => [usuarioId, rolId, p.permiso_id]);
       await conexion.query(
-        `INSERT INTO usuarios_roles_permisos (usuario_id, rol_id, permiso_id, concedido) VALUES ${placeholders}`,
+        `INSERT INTO usuarios_roles_permisos (usuario_id, rol_id, permiso_id) VALUES ${placeholders}`,
         params
       );
     }
@@ -535,9 +535,10 @@ export async function asignarPermisosPersonalizados(usuarioId, rolId, permisos) 
 }
 
 /**
- * Normaliza la lista de permisos entrante:[{permiso_id, concedido?}]
- * Descarta entradas sin id, deduplica por permiso_id y sanea `concedido`.
- * @returns {{ permiso_id: number, concedido: number }[]}
+ * Normaliza la lista de permisos entrante: [{ permiso_id }].
+ * Descarta entradas sin id y deduplica por permiso_id. La columna `concedido`
+ * ya no existe: la fila en usuarios_roles_permisos ES el permiso concedido.
+ * @returns {{ permiso_id: number }[]}
  */
 function normalizarPermisos(permisos) {
   if (!Array.isArray(permisos)) return [];
@@ -545,7 +546,7 @@ function normalizarPermisos(permisos) {
   for (const p of permisos) {
     const id = Number(p && p.permiso_id);
     if (!Number.isInteger(id) || id <= 0) continue;
-    vistos.set(id, { permiso_id: id, concedido: p.concedido === false ? 0 : 1 });
+    vistos.set(id, { permiso_id: id });
   }
   return [...vistos.values()];
 }
@@ -571,27 +572,26 @@ async function validarParUsuarioRol(usuarioId, rolId) {
 }
 
 /**
- * Permisos de un par (usuario, rol) con su estado de concesión.
- * Se traen TODOS (concedidos y denegados) para que el frontend pueda mostrar el
- * estado real de cada permiso, no solo el subconjunto concedido.
+ * Permisos de un par (usuario, rol).
+ * Devuelve los permisos asignados: la existencia de la fila ya es la concesión.
  *
  * `idx_urp_rol_usuario (rol_id, usuario_id)` resuelve el par por el rol; el
  * filtro por usuario se aplica sobre las pocas filas de ese rol.
  */
 export async function listarPermisosDeUsuarioRol(usuarioId, rolId) {
   const [rows] = await pool.query(
-    `SELECT p.id, p.nombre, urp.concedido, urp.creado_en AS asignado_en
+    `SELECT p.id, p.nombre, urp.creado_en AS asignado_en
      FROM usuarios_roles_permisos urp
      INNER JOIN permisos p ON p.id = urp.permiso_id
      WHERE urp.rol_id = ? AND urp.usuario_id = ?
      ORDER BY p.nombre`,
     [rolId, usuarioId]
   );
-  return rows.map((r) => ({ ...r, concedido: Boolean(r.concedido) }));
+  return rows;
 }
 
 /**
- * Quita un permiso (concedido o denegado) de un par (usuario, rol).
+ * Quita un permiso de un par (usuario, rol).
  * @throws {Error} 404 si el par no existe o el permiso no estaba asignado.
  */
 export async function quitarPermisoDeUsuarioRol(usuarioId, rolId, permisoId) {
@@ -653,7 +653,7 @@ export async function obtenerRolPersonalizadoConPermisos(usuarioId) {
 
   return {
     rol,
-    permisos: todos.filter((p) => p.concedido),
+    permisos: todos,
     permisos_detallados: todos,
   };
 }

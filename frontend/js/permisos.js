@@ -13,7 +13,7 @@
  *   - Renombrar exige MODIFICAR_PERMISOS y borrar ELIMINAR_PERMISOS. Antes ambos
  *     botones usaban CREAR_PERMISOS, que solo corresponde al alta.
  *   - Cada fila trae su auditoría y los conteos de uso (roles que lo tienen,
- *     usuarios con concedido / denegado).
+ *     usuarios a los que está concedido).
  *   - /roles y /usuarios solo se piden si hacen falta para los modales de
  *     asignación, que exigen ASIGNAR_PERMISOS.
  *
@@ -134,10 +134,6 @@ function renderTablaPermisos() {
       <td class="text-center">
         <span class="badge bg-light text-dark" title="Roles SISTEMA que lo tienen en su plantilla (Lógica A)">${p.total_roles ?? 0}</span>
       </td>
-      <td class="text-center">
-        <span class="badge bg-success" title="Usuarios con el permiso concedido (Lógica B)">${p.usuarios_concedidos ?? 0}</span>
-        <span class="badge bg-secondary" title="Usuarios con el permiso denegado explícitamente (Lógica B)">${p.usuarios_denegados ?? 0}</span>
-      </td>
       <td>${autorLegible(p.creado_por_usuario)}</td>
       <td>${autorLegible(p.actualizado_por_usuario)}</td>
       <td>${celdaFecha(p.creado_en)}</td>
@@ -154,7 +150,7 @@ function renderTablaPermisos() {
 }
 function celdaFecha(valor) {
   const texto = formatearFechaHora(valor).replace(',', '');
-  return `<span style="color: #4caf50; font-weight: 350; font-size: 0.85xem;">${escaparHtml(texto)}</span>`;
+  return `<span style="color: #4caf50; font-weight: 350; font-size: 0.85em;">${escaparHtml(texto)}</span>`;
 }
 
 /** Nombre legible del autor de auditoría, con el usuario como respaldo. */
@@ -444,7 +440,6 @@ async function guardarAsignacionPermisosUsuario() {
   const checkboxes = document.querySelectorAll('.perm-usu-check:checked');
   const permisos = Array.from(checkboxes).map(cb => ({
     permiso_id: parseInt(cb.value, 10),
-    concedido: true,
   }));
 
   const res = await apiRequest(`/usuarios/${usuarioId}/permisos-personalizados`, {

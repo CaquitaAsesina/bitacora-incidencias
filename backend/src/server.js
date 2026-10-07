@@ -46,9 +46,8 @@ const MySQLStore = MySQLStoreFactory(session);
 // Sesiones (persistidas en MySQL, cookie httpOnly)
 // ---------------------------------------------------------------------
 // express-mysql-session copia solo un puñado de claves a mysql2 y descarta
-// el resto (entre ellas `ssl`), así que no se le pasan credenciales: se le
-// entrega un pool propio ya montado con la misma configuración que el de la
-// app (incluida la conexión TLS a Aiven).
+// el resto, así que no se le pasan credenciales: se le entrega un pool propio
+// ya montado con la misma configuración que el de la app (MySQL local).
 const poolSesiones = mysql.createPool(opcionesMySQL);
 
 const sessionStore = new MySQLStore(

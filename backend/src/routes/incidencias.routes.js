@@ -11,7 +11,9 @@
  * El cierre se hace vía PATCH /:id con { cerrar: true }; PATCH /:id/cerrar
  * queda disponible para cerrarla sin editar el resto de campos.
  *
- * `tipo_centro` ya no existe en el schema, así que se eliminó su validación.
+ * `tipo_centro` y `fecha` ya no existen en el schema. La fecha de registro es
+ * `creado_en` (lo define el servidor al crear) y solo se puede ajustar al
+ * editar. `hora_inicio` se registra sola al crear (CURRENT_TIME del servidor).
  * Las columnas de auditoría (`creado_por`, `actualizado_por`) se rechazan
  * explícitamente en el body: las firma el usuario de la sesión.
  * =====================================================================
@@ -33,6 +35,7 @@ import {
 const router = Router();
 
 const HORA_HHMMSS = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
+const DATETIME_LOCAL = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?$/;
 
 /**
  * Rechaza que el cliente intente escribir la auditoría a mano.
@@ -69,10 +72,10 @@ const actualizarIncidenciaValidation = [
   body('ticket').optional().notEmpty().isLength({ max: 59 }).trim().escape(),
   body('responsable').optional().notEmpty().isLength({ max: 60 }).trim().escape(),
   body('descripcion').optional().notEmpty().isLength({ max: 255 }).trim().escape(),
-  body('fecha')
+  body('creado_en')
     .optional({ values: 'falsy' })
-    .isISO8601()
-    .withMessage('Fecha inválida'),
+    .matches(DATETIME_LOCAL)
+    .withMessage('El campo registrado en debe ser una fecha y hora válida (YYYY-MM-DDTHH:MM)'),
   body('hora_inicio')
     .optional({ values: 'falsy' })
     .matches(HORA_HHMMSS)

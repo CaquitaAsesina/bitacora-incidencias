@@ -71,7 +71,7 @@ async function cargarSugerencias() {
 /**
  * Rellena los <datalist> de los filtros y el desplegable de autores.
  *
- * `criadores` viene del mismo endpoint: son los usuarios que han registrado al
+ * `creadores` viene del mismo endpoint: son los usuarios que han registrado al
  * menos una incidencia, resueltos con idx_incidencias_creado_por. Es lo que
  * sustituye al antiguo input numérico "usuario_id".
  */
@@ -95,7 +95,7 @@ function pintarListasSugeridas() {
   if (!selectAutores) return;
 
   const seleccionado = selectAutores.value;
-  const autores = sugerencias.criadores || [];
+  const autores = sugerencias.creadores || [];
   selectAutores.innerHTML =
     '<option value="">Todos</option>' +
     autores
@@ -194,7 +194,7 @@ async function cargarIncidencias() {
   params.append('limit', 10);
 
   // Los filtros de dimensión viajan como igualdad exacta para que el backend
-  // use los índices compuestos (columna, fecha); `q` es la única búsqueda
+  // use los índices compuestos (columna, creado_en); `q` es la única búsqueda
   // parcial y va aparte.
   const filtros = {
     fecha_desde: document.getElementById('filtroDesde').value,
@@ -248,7 +248,7 @@ function renderTabla(incidencias) {
 
   if (incidencias.length === 0) {
     tbody.innerHTML =
-      '<tr><td colspan="17" class="text-center text-muted py-4">No hay incidencias</td></tr>';
+      '<tr><td colspan="16" class="text-center text-muted py-4">No hay incidencias</td></tr>';
     return;
   }
 
@@ -258,7 +258,6 @@ function renderTabla(incidencias) {
     tr.innerHTML = `
       <td>${inc.id}</td>
       <td class="fw-semibold">${escaparHtml(inc.ticket)}</td>
-      <td>${formatDate(inc.fecha)}</td>
       <td>${inc.hora_inicio || '-'}</td>
       <td>${inc.hora_fin || '-'}</td>
       <td>${escaparHtml(inc.centro)}</td>
@@ -292,7 +291,7 @@ function renderTabla(incidencias) {
 
 function celdaFecha(valor) {
   const texto = formatearFechaHora(valor).replace(',', '');
-  return `<span style="color: #4caf50; font-weight: 350; font-size: 0.85xem;">${escaparHtml(texto)}</span>`;
+  return `<span>${escaparHtml(texto)}</span>`;
 }
 /**
  * Nombre legible del autor de auditoría, con degradación en cascada:
@@ -321,7 +320,7 @@ window.cambiarPagina = (page) => {
   cargarIncidencias();
 };
 
-/** Crea una incidencia con los datos del modal de alta. */
+/** Crea una incidencia con los datos del modal de alta (el inicio lo pone el servidor). */
 async function guardarIncidencia() {
   const data = {
     centro: document.getElementById('centro').value,
@@ -378,7 +377,7 @@ function limpiarFiltros() {
   ];
   campos.forEach((id) => {
     const el = document.getElementById(id);
-    if (el) el.value = el.tagName === 'SELECT' && id === 'filtroOrden' ? 'fecha_desc' : '';
+    if (el) el.value = el.tagName === 'SELECT' && id === 'filtroOrden' ? 'creado_en_desc' : '';
   });
   currentPage = 1;
   cargarIncidencias();
@@ -393,19 +392,6 @@ function formatDate(dateStr) {
   }
   const d = new Date(dateStr);
   return Number.isNaN(d.getTime()) ? dateStr : d.toLocaleDateString('es-ES');
-}
-
-/** Convierte una fecha del API al formato YYYY-MM-DD que usa <input type="date">. */
-function fechaParaInput(valor) {
-  if (!valor) return '';
-  if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(valor)) {
-    return valor; // ya está en el formato correcto
-  }
-  const d = new Date(valor);
-  if (Number.isNaN(d.getTime())) return '';
-  const mes = String(d.getMonth() + 1).padStart(2, '0');
-  const dia = String(d.getDate()).padStart(2, '0');
-  return `${d.getFullYear()}-${mes}-${dia}`;
 }
 
 // ---------- Ver detalle ----------
@@ -452,7 +438,7 @@ window.verIncidencia = async function (id) {
       </div>`).join('');
 
   document.getElementById('detalleTiempos').innerHTML = [
-    ['Fecha', formatDate(inc.fecha)],
+    ['Fecha', formatDate(String(inc.creado_en).slice(0, 10))],
     ['Hora de inicio', inc.hora_inicio || '-'],
     ['Hora de fin', inc.hora_fin || '-'],
     ['Tiempo de solución', inc.tiempo_solucion || '-'],
@@ -492,7 +478,7 @@ window.abrirEditarIncidencia = async function (id) {
   document.getElementById('editarIncidencia').value = inc.incidencia;
   document.getElementById('editarResponsable').value = inc.responsable;
   document.getElementById('editarDescripcion').value = inc.descripcion;
-  document.getElementById('editarFecha').value = fechaParaInput(inc.fecha);
+  document.getElementById('editarCreadoEn').value = timestampParaInput(inc.creado_en);
   document.getElementById('editarHoraInicio').value = (inc.hora_inicio || '').slice(0, 5); // "HH:MM"
   document.getElementById('editarHoraFin').value = (inc.hora_fin || '').slice(0, 5);
 
@@ -508,7 +494,7 @@ window.abrirEditarIncidencia = async function (id) {
 
 document.getElementById('btnGuardarEditarIncidencia').addEventListener('click', async () => {
   const id = document.getElementById('editarId').value;
-  const fecha = document.getElementById('editarFecha').value;
+  const creadoEn = document.getElementById('editarCreadoEn').value;
   const horaInicio = document.getElementById('editarHoraInicio').value;
   const horaFin = document.getElementById('editarHoraFin').value;
 
@@ -521,7 +507,7 @@ document.getElementById('btnGuardarEditarIncidencia').addEventListener('click', 
     descripcion: document.getElementById('editarDescripcion').value,
   };
 
-  if (fecha) body.fecha = fecha;
+  if (creadoEn) body.creado_en = creadoEn.replace('T', ' ');
   if (horaInicio) body.hora_inicio = normalizarHora(horaInicio);
 
   if (!incidenciaEdicionCerrada) {
@@ -558,4 +544,16 @@ function normalizarHora(valor) {
   const mm = partes[1].padStart(2, '0');
   const ss = (partes[2] || '00').slice(0, 2).padStart(2, '0');
   return `${hh}:${mm}:${ss}`;
+}
+
+/**
+ * Convierte el timestamp del API (ISO UTC o 'YYYY-MM-DD HH:MM:SS') a la hora
+ * local del navegador en formato 'YYYY-MM-DDTHH:MM' para <input datetime-local>.
+ */
+function timestampParaInput(valor) {
+  if (!valor) return '';
+  const d = new Date(String(valor).replace(' ', 'T'));
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }

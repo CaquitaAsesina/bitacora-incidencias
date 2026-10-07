@@ -1,4 +1,4 @@
--- Active: 1791152059065@@mysql-punta-negra-project-desk.c.aivencloud.com@26056@bitacora_incidencias
+-- Active: 1791152181635@@127.0.0.1@3306@bitacora_incidencias
 CREATE DATABASE IF NOT EXISTS bitacora_incidencias CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 USE bitacora_incidencias;
@@ -91,8 +91,7 @@ CREATE TABLE IF NOT EXISTS usuarios_roles_permisos (
     usuario_id BIGINT NOT NULL COMMENT 'FK al usuario (parte de la PK compuesta).',
     rol_id BIGINT NOT NULL COMMENT 'FK al rol personalizado (parte de la PK compuesta).',
     permiso_id BIGINT NOT NULL COMMENT 'FK al permiso (parte de la PK compuesta).',
-    concedido BOOLEAN NOT NULL DEFAULT TRUE COMMENT 'TRUE = permiso concedido; FALSE = denegado explícitamente.',
-    creado_en TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Fecha y hora en que se otorgó o denegó el permiso.',
+    creado_en TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Fecha y hora en que se otorgó el permiso.',
     PRIMARY KEY (
         usuario_id,
         rol_id,
@@ -102,7 +101,7 @@ CREATE TABLE IF NOT EXISTS usuarios_roles_permisos (
     CONSTRAINT fk_urp_rol_id FOREIGN KEY (rol_id) REFERENCES roles (id) ON DELETE CASCADE,
     CONSTRAINT fk_urp_permiso_id FOREIGN KEY (permiso_id) REFERENCES permisos (id) ON DELETE CASCADE,
     INDEX idx_urp_rol_usuario (rol_id, usuario_id) COMMENT 'Reverse: qué usuarios tienen permisos personalizados bajo un rol concreto.',
-    INDEX idx_urp_permiso (permiso_id, concedido) COMMENT 'Reverse: qué usuarios tienen concedido/denegado un permiso concreto. Incluye concedido para filtrar sin ir a la fila.'
+    INDEX idx_urp_permiso (permiso_id) COMMENT 'Reverse: qué usuarios tienen un permiso concreto.'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'Lógica B: permisos personalizados por (usuario, rol). Solo roles tipo=PERSONALIZADO (garantizado en backend).';
 
 -- ============================================================
@@ -117,7 +116,6 @@ CREATE TABLE IF NOT EXISTS incidencias (
     ticket VARCHAR(59) NOT NULL COMMENT 'Número de ticket asociado, tiene que ser único.',
     responsable VARCHAR(60) NOT NULL COMMENT 'Quién atiende la incidencia (texto libre).',
     descripcion VARCHAR(255) NOT NULL COMMENT 'Descripción detallada del problema o solución.',
-    fecha DATE NOT NULL DEFAULT(CURRENT_DATE) COMMENT 'Fecha de la incidencia (auto al insertar).',
     hora_inicio TIME NOT NULL DEFAULT(CURRENT_TIME) COMMENT 'Hora de inicio (auto al insertar).',
     hora_fin TIME NULL COMMENT 'Hora de cierre. NULL mientras la incidencia esté abierta.',
     tiempo_solucion TIME NULL COMMENT 'Tiempo total de solución (HH:MM:SS). Lo calcula el backend.',
@@ -128,14 +126,15 @@ CREATE TABLE IF NOT EXISTS incidencias (
     CONSTRAINT uq_incidencias_ticket UNIQUE (ticket),
     CONSTRAINT fk_incidencias_creado_por FOREIGN KEY (creado_por) REFERENCES usuarios (id) ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT fk_incidencias_actualizado_por FOREIGN KEY (actualizado_por) REFERENCES usuarios (id) ON DELETE RESTRICT ON UPDATE CASCADE,
-    INDEX idx_incidencias_fecha_tipo (fecha, incidencia) COMMENT 'Reportes por rango de fecha filtrando por tipo de incidencia. También sirve para consultas solo por fecha (prefijo).',
-    INDEX idx_incidencias_centro_fecha (centro, fecha) COMMENT 'Reportes por centro en un rango de fecha. Cubre también consultas solo por centro.',
-    INDEX idx_incidencias_sistema_fecha (sistema, fecha) COMMENT 'Reportes por sistema en un rango de fecha. Cubre también consultas solo por sistema.',
-    INDEX idx_incidencias_responsable_fecha (responsable, fecha) COMMENT 'Reportes por responsable en un rango de fecha. Cubre también consultas solo por responsable.',
-    INDEX idx_incidencias_hora_fin_fecha (hora_fin, fecha) COMMENT 'Incidencias abiertas (hora_fin IS NULL) dentro de un rango de fecha.',
+    INDEX idx_incidencias_centro_creado_en (centro, creado_en) COMMENT 'Reportes por centro en un rango de fecha. Cubre también consultas solo por centro.',
+    INDEX idx_incidencias_sistema_creado_en (sistema, creado_en) COMMENT 'Reportes por sistema en un rango de fecha. Cubre también consultas solo por sistema.',
+    INDEX idx_incidencias_incidencia_creado_en (incidencia, creado_en) COMMENT 'Reportes por tipo de incidencia en un rango de fecha. Cubre también consultas solo por tipo.',
+    INDEX idx_incidencias_responsable_creado_en (responsable, creado_en) COMMENT 'Reportes por responsable en un rango de fecha. Cubre también consultas solo por responsable.',
+    INDEX idx_incidencias_hora_fin_creado_en (hora_fin, creado_en) COMMENT 'Incidencias abiertas (hora_fin IS NULL) dentro de un rango de fecha.',
+    INDEX idx_incidencias_creado_en (creado_en) COMMENT 'Ordenamiento y filtrado general por fecha de creación.',
     INDEX idx_incidencias_creado_por (creado_por) COMMENT 'FK: JOIN con usuarios creador y validación de RESTRICT en DELETE.',
     INDEX idx_incidencias_actualizado_por (actualizado_por) COMMENT 'FK: JOIN con usuarios que modificó y validación de RESTRICT en DELETE.'
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'Bitácora de incidencias. fecha y hora_inicio se rellenan solas. hora_fin y tiempo_solucion los pone el backend.';
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'Bitácora de incidencias. hora_inicio se rellena sola. hora_fin y tiempo_solucion los pone el backend.';
 
 -- ============================================================
 -- DATOS INICIALES

@@ -127,25 +127,9 @@ async function cargarKPIs() {
 
   container.innerHTML = [
     tarjeta('bi-journal-text', 'danger', kpis.total, 'Total', 'Incidencias que cumplen los filtros'),
-    tarjeta('bi-exclamation-circle', 'warning', kpis.abiertas, 'Abiertas', 'Sin hora de fin'),
-    tarjeta('bi-check-circle', 'success', kpis.cerradas, 'Cerradas', 'Con hora de fin registrada'),
     tarjeta('bi-percent', 'info', `${kpis.tasa_resolucion}%`, 'Tasa resolución', 'Cerradas sobre el total'),
-    tarjeta(
-      'bi-stopwatch',
-      'secondary',
-      kpis.tiempo_promedio_resolucion,
-      'Tiempo medio',
-      `Media de tiempo_solucion (HH:MM:SS) = ${kpis.tiempo_promedio_minutos} min`
-    ),
     tarjeta('bi-trophy', 'dark', kpis.tiempo_maximo_resolucion, 'Tiempo máximo', 'Mayor tiempo_solucion registrado'),
     tarjeta('bi-calendar-day', 'primary', kpis.incidencias_hoy, 'Registradas hoy', 'Incidencias con fecha de hoy'),
-    tarjeta(
-      'bi-diagram-3-fill',
-      'primary',
-      kpis.centros,
-      'Centros',
-      `Sistemas distintos: ${kpis.sistemas} · Tipos: ${kpis.tipos_incidencia} · Autores: ${kpis.autores}`
-    ),
   ].join('');
 }
 
@@ -166,12 +150,10 @@ async function cargarGraficos() {
   const [
     resPorDia,
     resPorSistema,
-    resPorEstado,
     resPorCentro,
   ] = await Promise.all([
     apiRequest(`/dashboard/por-dia?dias=30${f ? '&' + f.slice(1) : ''}`),
     apiRequest(`/dashboard/por-sistema${f}`),
-    apiRequest(`/dashboard/por-estado${f}`),
     apiRequest(`/dashboard/por-centro${f}`),
   ]);
 
@@ -227,26 +209,6 @@ async function cargarGraficos() {
   }
 
   // Por estado (sustituye al antiguo "tipo de centro")
-  if (resPorEstado.ok) {
-    charts.porEstado = new Chart(document.getElementById('chartPorEstado').getContext('2d'), {
-      type: 'doughnut',
-      data: {
-        labels: resPorEstado.data.map((d) => d.etiqueta),
-        datasets: [
-          {
-            data: resPorEstado.data.map((d) => d.total),
-            backgroundColor: ['#FFB703', '#06A77D'],
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: true,
-        aspectRatio: 1.3,
-        plugins: { legend: { position: 'bottom' } },
-      },
-    });
-  }
 
   // Por centro (apiladas abiertas/cerradas)
   if (resPorCentro.ok) {
