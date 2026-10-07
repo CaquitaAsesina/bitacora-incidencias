@@ -50,6 +50,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   document.getElementById('btnLimpiar').addEventListener('click', limpiarFiltros);
 
+  // Enter en cualquier campo de filtro aplica la búsqueda (como pulsar el botón).
+  ['filtroQ', 'filtroCentro', 'filtroSistema', 'filtroIncidencia',
+   'filtroRespTexto', 'filtroDesde', 'filtroHasta'].forEach((id) => {
+    document.getElementById(id)?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        document.getElementById('btnFiltrar').click();
+      }
+    });
+  });
+
   CAMPOS_SUGERIDOS.forEach(({ inputId, campo }) => adjuntarSugerencias(inputId, campo));
 
   // Rendimiento: sugerencias y listado son independientes -> en paralelo.

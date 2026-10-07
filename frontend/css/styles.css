@@ -124,3 +124,20 @@ body {
     background-position: -200% 0;
   }
 }
+
+/* =====================================================================
+   Gráficos del dashboard: scroll horizontal
+   El contenedor exterior (.chart-scroll) fija el alto y desplaza en X;
+   el interior (.chart-scroll-inner) crece con los puntos vía JS y obtiene
+   su ancho dinámico. Chart.js mide el canvas contra el interior con
+   maintainAspectRatio:false.
+   ===================================================================== */
+.chart-scroll {
+  overflow-x: auto;
+}
+
+.chart-scroll-inner {
+  position: relative;
+  width: 100%;
+  height: 340px;
+}

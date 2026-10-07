@@ -102,10 +102,10 @@ async function cargarMetadatos() {
 async function cargarKPIs() {
   const container = document.getElementById('kpisContainer');
   container.innerHTML = `
-    <div class="col-md-4 col-lg-2">
+    <div class="col-md-4 col-lg-3">
       <div class="card kpi-card skeleton" style="height: 100px;"></div>
     </div>
-  `.repeat(8);
+  `.repeat(4);
 
   const res = await apiRequest(`/dashboard/kpis${queryFiltros()}`);
   if (!res.ok) {
@@ -128,16 +128,16 @@ async function cargarKPIs() {
   container.innerHTML = [
     tarjeta('bi-journal-text', 'danger', kpis.total, 'Total', 'Incidencias que cumplen los filtros'),
     tarjeta('bi-percent', 'info', `${kpis.tasa_resolucion}%`, 'Tasa resolución', 'Cerradas sobre el total'),
-    tarjeta('bi-trophy', 'dark', kpis.tiempo_maximo_resolucion, 'Tiempo máximo', 'Mayor tiempo_solucion registrado'),
+    tarjeta('bi-trophy', 'dark', kpis.tiempo_total_resolucion, 'Tiempo total', 'Suma de tiempo_solucion'),
     tarjeta('bi-calendar-day', 'primary', kpis.incidencias_hoy, 'Registradas hoy', 'Incidencias con fecha de hoy'),
   ].join('');
 }
 
 /**
- * Carga todos los gráficos de barras/dona/línea.
+ * Carga el gráfico de series por día (creadas vs cerradas).
  *
- * Rendimiento: las 4 consultas son independientes, así que van en un solo
- * Promise.all (una espera de red en lugar de 4 viajes en serie).
+ * Rendimiento: es el único gráfico de cargarGraficos(); se mantiene el patrón
+ * de destruir el Chart.js previo para evitar repintar sobre el mismo canvas.
  */
 async function cargarGraficos() {
   const f = queryFiltros();
@@ -147,18 +147,15 @@ async function cargarGraficos() {
   Object.values(charts).forEach((c) => c.destroy());
   charts = {};
 
-  const [
-    resPorDia,
-    resPorSistema,
-    resPorCentro,
-  ] = await Promise.all([
-    apiRequest(`/dashboard/por-dia?dias=30${f ? '&' + f.slice(1) : ''}`),
-    apiRequest(`/dashboard/por-sistema${f}`),
-    apiRequest(`/dashboard/por-centro${f}`),
-  ]);
+  const resPorDia = await apiRequest(`/dashboard/por-dia?dias=30${f ? '&' + f.slice(1) : ''}`);
 
   // Por día (creadas vs cerradas)
   if (resPorDia.ok) {
+    const contenedor = document.getElementById('innerPorDia');
+    // Crece con los días: ancho mínimo fijo por punto para que el contenedor
+    // despliegue la barra de scroll horizontal en lugar de comprimir la serie.
+    ajustarScrollHorizontal(contenedor, resPorDia.data.length, 85);
+
     charts.porDia = new Chart(document.getElementById('chartPorDia').getContext('2d'), {
       type: 'line',
       data: {
@@ -184,57 +181,26 @@ async function cargarGraficos() {
       },
       options: {
         responsive: true,
+        maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
         scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
       },
     });
   }
+}
 
-  // Por sistema (top 10)
-  if (resPorSistema.ok) {
-    charts.porSistema = new Chart(document.getElementById('chartPorSistema').getContext('2d'), {
-      type: 'bar',
-      data: {
-        labels: resPorSistema.data.map((d) => d.etiqueta),
-        datasets: [
-          {
-            label: 'Incidencias',
-            data: resPorSistema.data.map((d) => d.total),
-            backgroundColor: '#E63946',
-          },
-        ],
-      },
-      options: { responsive: true, indexAxis: 'y' },
-    });
-  }
-
-  // Por estado (sustituye al antiguo "tipo de centro")
-
-  // Por centro (apiladas abiertas/cerradas)
-  if (resPorCentro.ok) {
-    charts.porCentro = new Chart(document.getElementById('chartPorCentro').getContext('2d'), {
-      type: 'bar',
-      data: {
-        labels: resPorCentro.data.map((d) => d.etiqueta),
-        datasets: [
-          {
-            label: 'Abiertas',
-            data: resPorCentro.data.map((d) => d.abiertas),
-            backgroundColor: '#FFB703',
-          },
-          {
-            label: 'Cerradas',
-            data: resPorCentro.data.map((d) => d.cerradas),
-            backgroundColor: '#06A77D',
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        scales: { x: { stacked: true }, y: { stacked: true } },
-      },
-    });
-  }
+/**
+ * Ajusta el ancho del contenedor del gráfico para que crezca con los puntos y
+ * el padre (chart-scroll) muestre una barra de scroll horizontal.
+ * @param {HTMLElement} contenedor el div .chart-scroll-inner que envuelve el canvas.
+ * @param {number} cantidadPuntos cuántos puntos va a dibujar Chart.js.
+ * @param {number} pxPorPunto ancho mínimo por punto (px) para que no se apisten las etiquetas.
+ */
+function ajustarScrollHorizontal(contenedor, cantidadPuntos, pxPorPunto) {
+  if (!contenedor) return;
+  const scroll = contenedor.closest('.chart-scroll');
+  const base = scroll && scroll.clientWidth > 0 ? scroll.clientWidth : 600;
+  contenedor.style.width = `${Math.max(base, cantidadPuntos * pxPorPunto)}px`;
 }
 
 /**
@@ -290,6 +256,10 @@ async function cargarGraficoTiempoSolucion() {
     Number(s.minutos) > Number(max.minutos) ? s : max
   );
 
+  // Crece con los tickets: fija el ancho por ticket para habilitar el scroll
+  // horizontal del contenedor en vez de comprimir la serie.
+  ajustarScrollHorizontal(document.getElementById('innerTiempo'), series.length, 110);
+
   charts.tiempoSolucion = new Chart(canvas.getContext('2d'), {
     type: 'line',
     data: {
@@ -313,7 +283,7 @@ async function cargarGraficoTiempoSolucion() {
     },
     options: {
       responsive: true,
-      maintainAspectRatio: true,
+      maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { display: true },
@@ -391,6 +361,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (el) el.value = '';
     });
     cargarTodo();
+  });
+
+  // Enter en un campo de filtro aplica la búsqueda (como pulsar el botón).
+  ['fechaDesde', 'fechaHasta', 'filtroCentro', 'filtroSistema', 'filtroIncidencia',
+   'filtroResponsable', 'filtroEstado', 'filtroCreadoPor'].forEach((id) => {
+    document.getElementById(id)?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        document.getElementById('btnFiltrar')?.click();
+      }
+    });
   });
 
   ['fechaDesde', 'fechaHasta', 'filtroCentro', 'filtroSistema', 'filtroIncidencia',

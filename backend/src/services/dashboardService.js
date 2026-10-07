@@ -108,7 +108,8 @@ function construirWhere(filtros = {}, alias = '') {
  * @param {object} filtros
  * @returns {Promise<object>} total, abiertas, cerradas, usuarios,
  *   tiempo_promedio_resolucion, incidencias_hoy, tiempo_promedio_minutos,
- *   tiempo_maximo, tasa_resolucion, centros, sistemas, autores.
+ *   tiempo_total_resolucion, tiempo_maximo_resolucion, tasa_resolucion,
+ *   centros, sistemas, autores.
  */
 export async function obtenerKPIs(filtros) {
   const w = construirWhere(filtros, '');
@@ -124,6 +125,8 @@ export async function obtenerKPIs(filtros) {
                 THEN TIME_TO_SEC(tiempo_solucion) END) AS promedio_segundos,
        MAX(CASE WHEN tiempo_solucion IS NOT NULL
                 THEN TIME_TO_SEC(tiempo_solucion) END) AS maximo_segundos,
+       COALESCE(SUM(CASE WHEN tiempo_solucion IS NOT NULL
+                        THEN TIME_TO_SEC(tiempo_solucion) END), 0) AS total_segundos,
        COALESCE(SUM(creado_en >= CURDATE()), 0) AS hoy,
        COUNT(DISTINCT centro)    AS centros,
        COUNT(DISTINCT sistema)   AS sistemas,
@@ -141,6 +144,7 @@ export async function obtenerKPIs(filtros) {
 
   const promedioSegundos = Math.max(Math.floor(Number(row.promedio_segundos) || 0), 0);
   const maximoSegundos = Math.max(Math.floor(Number(row.maximo_segundos) || 0), 0);
+  const totalSegundos = Math.max(Math.floor(Number(row.total_segundos) || 0), 0);
 
   return {
     total,
@@ -149,6 +153,7 @@ export async function obtenerKPIs(filtros) {
     usuarios: Number(row.usuarios) || 0,
     tiempo_promedio_resolucion: segundosAHHMMSS(promedioSegundos),
     tiempo_promedio_minutos: Number((promedioSegundos / 60).toFixed(2)),
+    tiempo_total_resolucion: segundosAHHMMSS(totalSegundos),
     tiempo_maximo_resolucion: segundosAHHMMSS(maximoSegundos),
     incidencias_hoy: Number(row.hoy) || 0,
     tasa_resolucion: total === 0 ? 0 : Number(((cerradas / total) * 100).toFixed(2)),
