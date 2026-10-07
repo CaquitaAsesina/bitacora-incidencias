@@ -40,13 +40,16 @@ administración de usuarios, roles y permisos.
     (usuario, rol) en `usuarios_roles_permisos` con `concedido = TRUE`.
 - **Bitácora de incidencias**:
   - Alta, listado con filtros y paginación, detalle, edición/cierre y borrado.
-  - Edición de `fecha` y `hora_inicio`, y corrección de `hora_fin` en incidencias
-    ya cerradas, con recálculo automático de `tiempo_solucion`.
+  - Edición de `creado_en` (registrado en) y `hora_inicio`, y corrección de
+    `hora_fin` en incidencias ya cerradas, con recálculo automático de
+    `tiempo_solucion`.
   - Autocompletado de centro, sistema, incidencia y responsable con los valores
     ya registrados (se pueden ocultar sugerencias sin tocar la base de datos).
 - **Dashboard analítico exclusivo** (permiso `VER_DASHBOARD`): tarjetas KPI y
-  8 gráficos, con un juego de filtros globales (fechas, centro, sistema, tipo
-  de incidencia, responsable, estado y autor de registro).
+  4 gráficos (por día, por sistema, por centro y tiempo de solución), con un
+  juego de filtros globales (fechas, centro, sistema, tipo de incidencia,
+  responsable, estado y autor de registro). Las series largas usan scroll
+  horizontal para no comprimirse.
 - **Administración**: usuarios (con sus roles, sus conteos de incidencias y su
   auditoría), roles (SISTEMA/PERSONALIZADO con conteos) y catálogo de permisos
   (crear, renombrar, eliminar y asignar), los tres con quién los creó y quién
@@ -63,7 +66,7 @@ administración de usuarios, roles y permisos.
 | Capa                | Tecnología                                                                |
 | ------------------- | ------------------------------------------------------------------------- |
 | Backend             | Node.js ≥ 18 + Express 4 (ES Modules, sin TypeScript)                     |
-| Base de datos       | MySQL 8.0.13+ (en producción, Aiven MySQL; Render no ofrece MySQL)        |
+| Base de datos       | MySQL 8.0.13+ (local; conexión en claro, sin TLS)                          |
 | Sesiones            | express-session + express-mysql-session (tabla `sessions` en la misma BD) |
 | Driver MySQL        | mysql2 (pool de conexiones con keep-alive)                                |
 | Seguridad           | bcrypt (cost 10), helmet, cors, express-validator                         |
@@ -154,9 +157,10 @@ En el frontend, cada página carga primero `api.js`, `ui.js` y `layout.js`
 
 1. **Crear** (`CREAR_INCIDENCIAS`): el formulario pide centro, sistema, tipo de
    incidencia, ticket (único), responsable (texto libre) y descripción. El
-   backend guarda `creado_por = sesión` (nunca del body) y deja que MySQL
-   rellene `fecha`, `hora_inicio`, `creado_en` y `actualizado_en`; `hora_fin` y
-   `tiempo_solucion` quedan en NULL.
+   backend guarda `creado_por = sesión` (nunca del body), `hora_inicio` se
+   registra sola con el reloj del servidor (`CURRENT_TIME`) y MySQL rellena
+   `creado_en` y `actualizado_en`; `hora_fin` y `tiempo_solucion` quedan en
+   NULL.
 2. **Listar/filtrar** (`VER_INCIDENCIAS`): filtros por rango de fechas, centro,
    sistema, incidencia, responsable, estado (abierta/cerrada), autor de registro
    (`creado_por`) y búsqueda libre (`q` sobre ticket/descripción). Los filtros
@@ -166,7 +170,7 @@ En el frontend, cada página carga primero `api.js`, `ui.js` y `layout.js`
 3. **Ver detalle** (ícono del ojo): datos generales, tiempos y quién registró la
    incidencia.
 4. **Modificar / cerrar** (`MODIFICAR_INCIDENCIAS`): el modal permite editar los
-   campos, la `fecha` y la `hora_inicio`.
+   campos, el `creado_en` (registrado en) y la `hora_inicio`.
    - Si la incidencia está **abierta**, al guardar se cierra: si se indica
      `hora_fin` se usa esa; si no, la hora actual del servidor. Se calcula
      `tiempo_solucion = hora_fin − hora_inicio` (si el resultado es negativo por
@@ -183,14 +187,18 @@ En el frontend, cada página carga primero `api.js`, `ui.js` y `layout.js`
 ### 4.4 Dashboard (`VER_DASHBOARD`)
 
 - Módulo exclusivo: `VER_INCIDENCIAS` **no** da acceso al Dashboard.
-- Tarjetas KPI: total, abiertas, cerradas, tasa de resolución, tiempo promedio
-  y máximo de resolución, incidencias de hoy y centros distintos (los conteos
-  de sistemas, tipos y autores salen en el tooltip).
-- Gráficos: serie diaria creadas/cerradas, top 10 sistemas, estado
-  (abiertas/cerradas), incidencias por centro (apiladas abiertas/cerradas),
-  top tipos de incidencia, top responsables de negocio, top autores de registro
-  y línea de tiempos de solución (últimos 30 tickets) con badges de
-  promedio/mínimo/máximo.
+- Tarjetas KPI: total, tasa de resolución, **tiempo total de solución** (suma
+  de los `tiempo_solucion`) e incidencias registradas hoy.
+- Gráficos:
+  - **Incidencias creadas y cerradas por día** (serie diaria).
+  - **Sistemas con más incidencias** (top 10, barras horizontales).
+  - **Incidencias por centro** (barras apiladas abiertas/cerradas).
+  - **Tiempo de solución por ticket** (últimos 30 tickets) con badges de
+    promedio/mínimo/máximo en la cabecera.
+- Las series por día y por ticket crecen con los puntos: el contenedor fija un
+  ancho mínimo por punto y habilita una **barra de scroll horizontal** en vez de
+  comprimir el gráfico a la tarjeta. Los rankings (sistema y centro) usan el
+  ancho completo de su tarjeta, sin scroll.
 - Un único juego de filtros globales (fechas, centro, sistema, tipo de
   incidencia, responsable, estado y autor) que se aplica a KPIs y gráficos. Al
   cambiar cualquiera se recarga todo **en paralelo**; `cargarTodo()` evita
@@ -200,7 +208,9 @@ En el frontend, cada página carga primero `api.js`, `ui.js` y `layout.js`
   con datos: el frontend no duplica catálogos.
 - **Dos rankings distintos que no se mezclan**: `/por-responsable` es el
   responsable de negocio (texto libre de la incidencia) y `/por-autor` es el
-  usuario del sistema que registró la fila (`creado_por`).
+  usuario del sistema que registró la fila (`creado_por`). El frontend solo
+  muestra los cuatro gráficos anteriores; los endpoints de ranking por estado,
+  tipo, responsable y autor siguen disponibles en la API.
 
 ### 4.5 Usuarios, roles y permisos
 
@@ -237,15 +247,17 @@ de crear, lo que dejaba cuentas sin capacidad real de edición ni borrado).
 
 ### 4.6 Filtros de las tablas
 
-- Todas las tablas filtran **en vivo** (sin pulsar "Aplicar Filtros", aunque el
-  botón sigue disponible):
-  - **Incidencias y Usuarios**: los filtros y la ordenación viajan al backend y
-    el listado se recarga. En Usuarios, los cuatro campos de texto se unen en un
-    parámetro `q` y el orden sale de una lista blanca del servidor
-    (`alfabetico`, `usuario`, `reciente`, `antiguo`, `modificado`, `id`, …).
-  - **Roles**: el filtro de `tipo` va al servidor (`idx_roles_tipo`); nombre y
-    fechas se resuelven en el navegador, que es un catálogo pequeño.
-  - **Permisos**: filtrado en el cliente sobre el catálogo ya cargado.
+- **Incidencias**: los filtros se aplican con el botón "Aplicar Filtros" o
+  pulsando **Enter** en cualquier campo; los filtros y la ordenación viajan al
+  backend y el listado se recarga.
+- **Dashboard**: también aplica con "Aplicar Filtros"/**Enter** y recarga en
+  vivo al cambiar cualquiera de sus desplegables.
+- **Usuarios** (en vivo): cada cambio recarga; los cuatro campos de texto se
+  unen en un parámetro `q` y el orden sale de una lista blanca del servidor
+  (`alfabetico`, `usuario`, `reciente`, `antiguo`, `modificado`, `id`, …).
+- **Roles**: el filtro de `tipo` va al servidor (`idx_roles_tipo`); nombre y
+  fechas se resuelven en el navegador, que es un catálogo pequeño.
+- **Permisos**: filtrado en el cliente sobre el catálogo ya cargado.
 - El rango de fechas de Usuarios/Roles/Permisos es inclusivo y coincide si la
   **fecha de creación o la de última modificación** caen dentro del rango;
   admite solo "Desde", solo "Hasta" o ambos. "Limpiar" borra todos los filtros.
@@ -282,8 +294,6 @@ rol ADMINISTRADOR con todos los permisos y un usuario `admin` inicial.
 | `DB_USER` / `DB_USERNAME` | Sí          | Usuario de MySQL (se acepta cualquiera de los dos nombres).                                        |
 | `DB_PASSWORD`             | Sí          | Contraseña de MySQL.                                                                               |
 | `DB_NAME`                 | Sí          | Nombre de la base (por defecto `bitacora_incidencias`).                                            |
-| `DB_SSL`                  | No          | Activa TLS contra el servidor MySQL: `1`, `true`, `yes` o `REQUIRED` lo activan; `false`/`0` lo apaga. Por defecto desactivado (MySQL local). |
-| `DB_SSL_CA`               | No          | Ruta a la CA del proyecto, relativa a `backend/` (por defecto `certs/ca.pem`). Solo se lee cuando TLS está activo. |
 | `SESSION_SECRET`          | Recomendada | Secreto para firmar la cookie de sesión. Usa una cadena larga y aleatoria; cámbiala en producción. |
 | `PORT`                    | No          | Puerto del servidor (por defecto `3000`).                                                          |
 | `NODE_ENV`                | No          | `production` activa cookies `secure`.                                                              |
@@ -291,40 +301,12 @@ rol ADMINISTRADOR con todos los permisos y un usuario `admin` inicial.
 > `backend/.env` está en `.gitignore` y **nunca** debe versionarse.
 > En el repositorio solo vive `.env.example` con valores de ejemplo.
 
-### 6.1 MySQL remoto con TLS (Aiven)
+### 6.1 MySQL local
 
-Aiven exige conexión cifrada y, además, **su front-end no completa el handshake
-TLS si el paquete SSL Request de 36 bytes llega en un solo segmento TCP** (la
-conexión se queda muda y expira). El mismo problema aparece con el cliente
-oficial `mysql`, así que no es un defecto de mysql2. Para que Aiven lo procese
-bien, el paquete debe viajar en dos segmentos.
-
-`backend/src/config/db.js` combina ambas cosas (en la primera sección del
-archivo):
-
-- calcula las opciones TLS a partir de las variables de entorno y las pasa al
-  pool (`ssl: { ca, rejectUnauthorized: true, verifyIdentity: true }`);
-- parchea mysql2 para que el SSL Request se envíe en dos `write()` (cabecera
-  + payload), dejando intacto el orden del ClientHello y el resto de paquetes.
-
-El pool de sesiones de `express-mysql-session` recibe la misma configuración
-(`server.js` le entrega un pool propio con `opcionesMySQL`, porque ese paquete
-filtra las claves que no conoce y descartaría `ssl`).
-
-**Prueba de verificación** (con el `.env` de producción):
-
-```bash
-cd backend && node --input-type=module -e "
-import dbPool from './src/config/db.js';
-const [f] = await dbPool.query('SELECT 1 AS ok');
-console.log(f[0].ok === 1 ? 'OK: TLS conecta' : 'resultado inesperado');
-await dbPool.end();
-"
-```
-
-> El mismo `SELECT 1` con mysql2 **sin** el parche (la CA sola, sin partir el
-> SSL Request) queda colgado 10 s y no imprime nada; ese es el síntoma original
-> de la conexión contra Aiven.
+El proyecto se conecta a un MySQL local en claro (vía TCP, sin TLS); no hay
+`DB_SSL` ni certificados. El pool fija `SET time_zone = '-05:00'` en cada
+conexión nueva para que `CURRENT_TIME`, `NOW()` y los filtros de fecha trabajen
+todos en hora de Perú (UTC-5, sin horario de verano).
 
 ## 7. Ejecución
 
@@ -372,8 +354,7 @@ curl -s -b cookies.txt http://localhost:3000/api/dashboard/kpis
   que `backend/.env` no aparezca en `git ls-files`.
 - **Rotación de credenciales**: si una contraseña o host real llegó a
   commitearse, considera la credencial comprometida: cámbiala en el proveedor
-  (Aiven → usuario `avnadmin` → _Reset password_) y actualiza `.env` y las
-  variables del despliegue.
+  de MySQL y actualiza `.env` y las variables del despliegue.
 - **Contraseña del admin**: cámbiala tras el primer acceso (ver sección 8).
 - **Sesiones**: cookie `httpOnly`, `sameSite=lax`, `secure` en producción,
   expiración de 24 h y `SESSION_SECRET` propio por entorno.
@@ -455,8 +436,8 @@ activa y el permiso listado (`requirePermission`).
 | GET    | `/`                  | `VER_INCIDENCIAS`       | Listado con filtros y paginación (`page`, `limit`).                                                                                        |
 | GET    | `/valores-sugeridos` | `VER_INCIDENCIAS`       | Valores distintos para autocompletado.                                                                                                     |
 | GET    | `/:id`               | `VER_INCIDENCIAS`       | Detalle de una incidencia.                                                                                                                 |
-| POST   | `/`                  | `CREAR_INCIDENCIAS`     | Alta; `creado_por = sesión`; `fecha`/`hora_inicio` por MySQL.                                                                              |
-| PATCH  | `/:id`               | `MODIFICAR_INCIDENCIAS` | Edita campos, `fecha` y `hora_inicio`; cierra con `{ cerrar: true }`; corrige `hora_fin` si ya está cerrada (recalcula `tiempo_solucion`). |
+| POST   | `/`                  | `CREAR_INCIDENCIAS`     | Alta; `creado_por = sesión`; `hora_inicio` por servidor (`CURRENT_TIME`).                                                                                   |
+| PATCH  | `/:id`               | `MODIFICAR_INCIDENCIAS` | Edita campos, `creado_en` y `hora_inicio`; cierra con `{ cerrar: true }`; corrige `hora_fin` si ya está cerrada (recalcula `tiempo_solucion`).               |
 | PATCH  | `/:id/cerrar`        | `MODIFICAR_INCIDENCIAS` | Cierre directo con la hora del servidor.                                                                                                   |
 | DELETE | `/:id`               | `ELIMINAR_INCIDENCIAS`  | Elimina incidencia.                                                                                                                        |
 
@@ -474,7 +455,7 @@ pintan sin una segunda petición.
 
 | Método | Ruta                   | Descripción                                                                     |
 | ------ | ---------------------- | ------------------------------------------------------------------------------- |
-| GET    | `/kpis`                | Total, abiertas, cerradas, tasa de resolución, tiempo promedio, hoy y usuarios. |
+| GET    | `/kpis`                | Total, abiertas, cerradas, tasa de resolución, tiempo total y máximo de solución, hoy, centros distintos y usuarios. |
 | GET    | `/por-sistema`         | Top 10 sistemas con más incidencias.                                            |
 | GET    | `/por-estado`          | Abiertas vs cerradas.                                                           |
 | GET    | `/por-centro`          | Incidencias por centro (apiladas abiertas/cerradas).                            |
@@ -518,13 +499,17 @@ Notas:
 
 - `creado_en` / `actualizado_en` existen en usuarios, roles, permisos e
   incidencias (`TIMESTAMP(6)` con `DEFAULT` y `ON UPDATE`).
-- `incidencias.fecha` y `hora_inicio` se rellenan en MySQL al insertar
-  (`DEFAULT (CURRENT_DATE)` / `DEFAULT (CURRENT_TIME)`).
+- `incidencias.hora_inicio` se rellena sola al insertar
+  (`DEFAULT (CURRENT_TIME)`); `fecha` ya no existe como columna: el día del
+  registro es `DATE(creado_en)`.
 - Índices de apoyo: los compuestos que cubren cada filtro del dashboard
-  (`idx_incidencias_fecha_tipo`, `idx_incidencias_centro_fecha`,
-  `idx_incidencias_sistema_fecha`, `idx_incidencias_responsable_fecha`,
-  `idx_incidencias_hora_fin_fecha`), los de FK de auditoría y, para los
-  catálogos, `idx_roles_tipo` (filtro por tipo) e
+  (`idx_incidencias_centro_creado_en`, `idx_incidencias_sistema_creado_en`,
+  `idx_incidencias_incidencia_creado_en`,
+  `idx_incidencias_responsable_creado_en`,
+  `idx_incidencias_hora_fin_creado_en`, `idx_incidencias_creado_en`), los de
+  FK de auditoría (`idx_incidencias_creado_por`,
+  `idx_incidencias_actualizado_por`) y, para los catálogos, `idx_roles_tipo`
+  (filtro por tipo), `idx_usuarios_creado_en` e
   `idx_usuarios_habilitado_nombre` (listado alfabético). Las tablas pivote
   llevan índices inversos para responder "¿qué roles tienen este permiso?" o
   "¿qué usuarios tienen este rol?" sin escanear.
@@ -545,9 +530,8 @@ Notas:
 
 ## 12. Rendimiento
 
-La base de datos está en un MySQL gestionado (Aiven, región Fráncfort), con una
-latencia de red de ~200 ms por consulta. Por eso el diseño prioriza **reducir
-viajes** y **paralelizar lo independiente**:
+El diseño prioriza **reducir viajes** y **paralelizar lo independiente**
+(útil también si la base está en otro host con latencia de red):
 
 - `obtenerPermisosEfectivos` resuelve las Lógicas A y B en **una sola consulta**
   (UNION): afecta a todas las peticiones protegidas, al login y a `/auth/me`.
@@ -567,42 +551,27 @@ viajes** y **paralelizar lo independiente**:
   en una única consulta.
 - El pool MySQL usa `enableKeepAlive` para evitar reconexiones (handshake
   TCP/TLS) cuando la base cierra conexiones inactivas.
-- El frontend: el dashboard lanza sus 10 peticiones **en paralelo** desde
-  `cargarTodo()` (metadatos, KPIs, serie de tiempos y los 7 gráficos), con un
+- El frontend: el dashboard lanza sus peticiones **en paralelo** desde
+  `cargarTodo()` (metadatos, KPIs, serie de tiempos y los 4 gráficos), con un
   flag que corta el ciclo si el usuario sigue cambiando filtros —sin él dos
   renders simultáneos dejan un canvas en uso y Chart.js lanza error—;
   incidencias (sugerencias + listado) y usuarios (catálogos + listado) también,
   y cada página hace **una sola** llamada a `/api/auth/me` por carga.
-- El despliegue en Render se configura en **Fráncfort** (`render.yml`, en la
-  raíz del repositorio) para quedar junto a la base y eliminar la mayor parte
-  de la latencia de red.
 
-## 13. Despliegue en Render
+## 13. Despliegue en un host Node
 
-El Blueprint está en **`render.yml`, en la raíz del repositorio** (Render lo
-detecta automáticamente con ese nombre). En Render: **New → Blueprint** y
-apuntar al repositorio.
+El proyecto es una app Node/Express estándar: sirve `frontend/` como estáticos
+y la API en `/api/*`. Para ponerla en producción:
 
-Configuración del servicio:
-
-- Build: `cd backend && npm install`
+- Build / dependencias: `cd backend && npm install`
 - Start: `cd backend && npm start`
-- Health check: `/`
-- Región: `frankfurt`, plan `free`
+- Variables de entorno: las de la sección 6 (`DB_*`, `SESSION_SECRET`,
+  `NODE_ENV=production` para cookies `secure`).
+- Health check: `GET /` (devuelve el login o redirige según sesión).
 
-La base de datos es un MySQL externo (Render no ofrece MySQL). Las credenciales
-se configuran **como variables de entorno del servicio** en el dashboard y
-nunca en el YAML ni en el repositorio (`render.yml` las declara con
-`sync: false`, así Render las pide): `DB_HOST`, `DB_PORT`, `DB_USER`,
-`DB_PASSWORD`, `SESSION_SECRET`; `DB_NAME`, `NODE_ENV=production`,
-`DB_SSL=REQUIRED` y `DB_SSL_CA=certs/ca.pem` van fijos en el Blueprint
-(`REQUIRED` activa la conexión TLS que Aiven exige y puede sobreescribirse
-en el dashboard con `false`/`0` para un MySQL local sin cifrado).
-`backend/certs/ca.pem` (CA del proyecto Aiven) está versionado y es
-indispensable: sin él el backend no puede validar la cadena TLS.
-
-> El plan free de Render suspende la instancia tras unos minutos de inactividad:
-> la primera petición después de eso tarda unos segundos (cold start).
+> En plataformas con plan free (p. ej. Render), la instancia se suspende tras
+> unos minutos de inactividad: la primera petición después de eso tarda unos
+> segundos (cold start).
 
 ## 14. Convenciones para extender el proyecto
 

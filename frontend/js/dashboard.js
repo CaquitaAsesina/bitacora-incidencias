@@ -2,21 +2,25 @@
  * =====================================================================
  * js/dashboard.js — Dashboard analítico (dashboard.html)
  * =====================================================================
- * Tarjetas KPI + gráficos Chart.js. Todo el módulo requiere VER_DASHBOARD:
+ * Tarjetas KPI + 4 gráficos Chart.js. Todo el módulo requiere VER_DASHBOARD:
  * el guard de acceso está en DOMContentLoaded.
  *
  * ALINEADO CON EL BACKEND:
- *   - Ya no existe `por-tipo-centro`: ese gráfico se sustituyó por el de
- *     ESTADO (abiertas/cerradas), que se resuelve por el índice de hora_fin.
+ *   - `tipo_centro` y la columna `fecha` ya no existen: el día del registro es
+ *     DATE(creado_en). Por eso los endpoints agrupan por fecha de `creado_en`.
  *   - Los endpoints de dimensión devuelven la etiqueta en `etiqueta`, no en
  *     `sistema`/`centro`/`incidencia`. Ver dashboardService.js.
  *   - Hay dos rankings distintos y NO intercambiables: `/por-responsable` es
  *     el responsable de negocio (texto libre) y `/por-autor` es el usuario del
  *     sistema que registró la fila (auditoría `creado_por`).
  *   - Los desplegables de filtro se llenan desde `/dashboard/metadatos`, así
- *     que el frontend no duplica catálogos ni losHypotetiza.
+ *     que el frontend no duplica catálogos ni los hipotetiza.
+ *   - KPI "Tiempo total" = suma de tiempo_solucion (`tiempo_total_resolucion`);
+ *     el badge "Máx" del gráfico de tickets usa `estadisticas.maximo_min`.
  *
- * Flujo: cargarTodo() -> KPIs + todos los gráficos + serie temporal.
+ * Flujo: cargarTodo() -> KPIs + los 4 gráficos + serie temporal, en paralelo.
+ * Responsividad: por-día y por-ticket fijan ancho por punto y desplazan en X
+ * (scroll horizontal); sistema y centro usan el ancho completo de la tarjeta.
  * Para agregar un gráfico: crea su canvas en dashboard.html, añade aquí la
  * función de carga y llámala desde cargarTodo().
  * =====================================================================
@@ -102,7 +106,7 @@ async function cargarMetadatos() {
 async function cargarKPIs() {
   const container = document.getElementById('kpisContainer');
   container.innerHTML = `
-    <div class="col-md-4 col-lg-3">
+    <div class="col-6 col-md-4 col-lg-3">
       <div class="card kpi-card skeleton" style="height: 100px;"></div>
     </div>
   `.repeat(4);
@@ -116,7 +120,7 @@ async function cargarKPIs() {
   const kpis = res.data;
 
   const tarjeta = (icono, color, valor, etiqueta, titulo) => `
-    <div class="col-md-4 col-lg-3">
+    <div class="col-6 col-md-4 col-lg-3">
       <div class="card kpi-card text-center p-3" title="${titulo}">
         <i class="bi ${icono} fs-3 text-${color}"></i>
         <h3 class="mt-2 mb-0">${valor}</h3>
@@ -134,10 +138,11 @@ async function cargarKPIs() {
 }
 
 /**
- * Carga el gráfico de series por día (creadas vs cerradas).
+ * Carga los gráficos por día, por sistema y por centro.
  *
- * Rendimiento: es el único gráfico de cargarGraficos(); se mantiene el patrón
- * de destruir el Chart.js previo para evitar repintar sobre el mismo canvas.
+ * Rendimiento: las tres consultas son independientes y van en un solo
+ * Promise.all (una espera de red en lugar de tres viajes en serie). Se
+ * destruye el Chart.js previo para evitar repintar sobre el mismo canvas.
  */
 async function cargarGraficos() {
   const f = queryFiltros();
@@ -147,7 +152,12 @@ async function cargarGraficos() {
   Object.values(charts).forEach((c) => c.destroy());
   charts = {};
 
-  const resPorDia = await apiRequest(`/dashboard/por-dia?dias=30${f ? '&' + f.slice(1) : ''}`);
+  // Rendimiento: las 3 consultas son independientes -> una sola espera de red.
+  const [resPorDia, resPorSistema, resPorCentro] = await Promise.all([
+    apiRequest(`/dashboard/por-dia?dias=30${f ? '&' + f.slice(1) : ''}`),
+    apiRequest(`/dashboard/por-sistema${f}`),
+    apiRequest(`/dashboard/por-centro${f}`),
+  ]);
 
   // Por día (creadas vs cerradas)
   if (resPorDia.ok) {
@@ -184,6 +194,70 @@ async function cargarGraficos() {
         maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
         scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+      },
+    });
+  }
+
+  // Por sistema (top 10)
+  if (resPorSistema.ok) {
+    charts.porSistema = new Chart(document.getElementById('chartPorSistema').getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: resPorSistema.data.map((d) => d.etiqueta),
+        datasets: [
+          {
+            label: 'Incidencias',
+            data: resPorSistema.data.map((d) => d.total),
+            backgroundColor: '#E63946',
+            borderRadius: 4,
+            barThickness: 'flex',
+            maxBarThickness: 20,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        indexAxis: 'y',
+        plugins: {
+          legend: { display: false },
+        },
+        scales: {
+          x: { beginAtZero: true, ticks: { precision: 0 } },
+          y: { ticks: { autoSkip: false } },
+        },
+      },
+    });
+  }
+
+  // Por centro (apiladas abiertas/cerradas)
+  if (resPorCentro.ok) {
+    charts.porCentro = new Chart(document.getElementById('chartPorCentro').getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: resPorCentro.data.map((d) => d.etiqueta),
+        datasets: [
+          {
+            label: 'Abiertas',
+            data: resPorCentro.data.map((d) => d.abiertas),
+            backgroundColor: '#FFB703',
+            borderRadius: 4,
+          },
+          {
+            label: 'Cerradas',
+            data: resPorCentro.data.map((d) => d.cerradas),
+            backgroundColor: '#06A77D',
+            borderRadius: 4,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: { stacked: true, ticks: { precision: 0 } },
+          y: { stacked: true },
+        },
       },
     });
   }
@@ -306,7 +380,6 @@ async function cargarGraficoTiempoSolucion() {
       scales: {
         y: { beginAtZero: true, title: { display: true, text: 'Minutos' } },
         x: {
-          title: { display: true, text: 'Ticket' },
           ticks: { maxRotation: 60, minRotation: 45, autoSkip: false },
         },
       },

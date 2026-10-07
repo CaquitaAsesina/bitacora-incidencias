@@ -5,8 +5,9 @@
   Acceso: solo con permiso VER_DASHBOARD (guard en dashboard.js).
   Origen de datos para la suma de tiempo de solución: KPIs.tiempo_total_resolucion.
   Los ids funcionales (fechaDesde, fechaHasta, btnFiltrar, btnLimpiar, kpisContainer,
-  chartPorDia, chartTiempoSolucion, tiempoPromedio, tiempoMinimo, tiempoMaximo,
-  sinTiempoSolucion, userInfo, logoutBtn, sidebarNav, toastContainer) se conservan.
+  chartPorDia, chartPorSistema, chartPorCentro, chartTiempoSolucion, tiempoPromedio,
+  tiempoMinimo, tiempoMaximo, sinTiempoSolucion, userInfo, logoutBtn, sidebarNav,
+  toastContainer) se conservan.
 -->
 <html lang="es">
 
@@ -205,6 +206,38 @@
                                 <p class="text-muted small mb-0 mt-2" id="sinTiempoSolucion" style="display: none;">
                                     No hay incidencias cerradas con tiempo de solución registrado.
                                 </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Rankings por sistema y por centro -->
+                <div class="row g-4 mt-0">
+                    <div class="col-12 col-lg-6">
+                        <div class="card h-100">
+                            <div class="card-header bg-white">
+                                <h6 class="mb-0">Sistemas con más Incidencias</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="chart-scroll" id="scrollPorSistema">
+                                    <div class="chart-scroll-inner" id="innerPorSistema">
+                                        <canvas id="chartPorSistema"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-lg-6">
+                        <div class="card h-100">
+                            <div class="card-header bg-white">
+                                <h6 class="mb-0">Incidencias por Centro</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="chart-scroll" id="scrollPorCentro">
+                                    <div class="chart-scroll-inner" id="innerPorCentro">
+                                        <canvas id="chartPorCentro"></canvas>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
