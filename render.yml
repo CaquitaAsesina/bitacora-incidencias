@@ -1,0 +1,39 @@
+# =====================================================================
+# render.yml — Despliegue en Render (solo el web service)
+# =====================================================================
+# La app (Node/Express) se despliega en Render y se conecta a un MySQL
+# que corre en TU laptop (demo). Render NO ofrece MySQL gestionado.
+#
+# Para que funcione:
+#   1. Tu laptop debe estar alcanzable desde internet (IP pública o
+#      túnel tipo ngrok/cloudflared) y con MySQL escuchando en 0.0.0.0
+#      (por defecto MySQL solo escucha en 127.0.0.1).
+#   2. En la creación del Blueprint, Render te pedira DB_HOST (IP/dominio
+#      publico de tu laptop), DB_USER y DB_PASSWORD (sync: false).
+#   3. Conexion EN CLARO (sin TLS): solo para demo, no para datos reales.
+# =====================================================================
+
+services:
+  - type: web
+    name: bitacora-incidencias
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: cd backend && npm install
+    startCommand: cd backend && npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        value: '3306'
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_NAME
+        value: bitacora_incidencias
+      - key: SESSION_SECRET
+        generateValue: true
